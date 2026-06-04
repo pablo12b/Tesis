@@ -254,65 +254,75 @@ def registrar_hash_procesado(contenido):
 def es_fecha_reciente(fecha_str, dias=28):
     """Verifica si una fecha es reciente (últimos N días)"""
     try:
-        if not fecha_str or fecha_str in ["Desconocida", "Reciente"]:
+        if not fecha_str or str(fecha_str).strip().lower() in ["desconocida", "reciente", ""]:
             logger.debug("es_fecha_reciente: Sin fecha, asumiendo reciente")
             return True
             
-        fecha_str_clean = fecha_str.strip().lower()
+        fecha_str_clean = str(fecha_str).strip().lower()
         
         # Patrones obvios de "reciente"
         if any(x in fecha_str_clean for x in ["hora", "horas", "h ago", "hace un momento", "minuto", "segundo", "ayer", "yesterday", "today", "hoy"]):
-            logger.debug(f"es_fecha_reciente: '{fecha_str_clean}' contiene patrón reciente")
             return True
             
-        # Extraer "hace X días" o "hace X semanas"
-        match_dias = re.search(r'hace\s+(\d+)\s+d[íi]as?', fecha_str_clean)
+        # Extraer números seguidos de letras cortas (ej: 3d, 1w, 5h, 2m, 10 s) típicos de redes sociales
+        match_corto = re.search(r'^(\d+)\s*([dhwms])\b', fecha_str_clean)
+        if match_corto:
+            val = int(match_corto.group(1))
+            unidad = match_corto.group(2)
+            if unidad in ['h', 'm', 's']: return True
+            if unidad == 'd': return val <= dias
+            if unidad == 'w': return (val * 7) <= dias
+            
+        # Extraer "hace X días", "X days ago"
+        match_dias = re.search(r'(?:hace\s+)?(\d+)\s+(?:d[íi]as?|days?)(?:\s+ago)?', fecha_str_clean)
         if match_dias:
             return int(match_dias.group(1)) <= dias
             
-        match_semanas = re.search(r'hace\s+(\d+)\s+semanas?', fecha_str_clean)
+        # Extraer "hace X semanas", "X weeks ago", "X sem"
+        match_semanas = re.search(r'(?:hace\s+)?(\d+)\s+(?:semanas?|weeks?|sem)(?:\s+ago)?', fecha_str_clean)
         if match_semanas:
             return (int(match_semanas.group(1)) * 7) <= dias
             
-        match_meses = re.search(r'hace\s+(\d+)\s+mes', fecha_str_clean)
+        # Extraer meses (si es 1 mes o más, suele ser > 28 días, rechazamos por seguridad)
+        match_meses = re.search(r'(?:hace\s+)?(\d+)\s+(?:mes(?:es)?|months?|mo)(?:\s+ago)?', fecha_str_clean)
         if match_meses:
-            return False # Un mes o más lo marcamos como antiguo
+            return False 
         
-        if 'año' in fecha_str_clean or 'year' in fecha_str_clean:
+        if 'año' in fecha_str_clean or 'year' in fecha_str_clean or ' y ' in fecha_str_clean:
             return False
         
         # Formato ISO YYYY-MM-DD
         match_iso = re.match(r'^(\d{4})-(\d{1,2})-(\d{1,2})', fecha_str_clean)
         if match_iso:
             try:
-                year = int(match_iso.group(1))
-                month = int(match_iso.group(2))
-                day = int(match_iso.group(3))
+                year, month, day = map(int, match_iso.groups())
                 fecha = datetime(year, month, day)
                 return (datetime.now() - fecha).days <= dias
-            except Exception as e:
-                pass
+            except: pass
         
         # Formato DD/MM/YYYY
         match_dmy = re.search(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})', fecha_str_clean)
         if match_dmy:
             try:
-                day = int(match_dmy.group(1))
-                month = int(match_dmy.group(2))
-                year = int(match_dmy.group(3))
+                day, month, year = map(int, match_dmy.groups())
                 fecha = datetime(year, month, day)
                 return (datetime.now() - fecha).days <= dias
-            except Exception as e:
-                pass
+            except: pass
                 
-        # Formato textual español: "10 de mayo de 2023" o "12 abr"
-        meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+        # Formato textual: "10 de mayo de 2023" o "12 abr" o "May 10"
+        meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic", "jan", "apr", "aug", "dec"]
         for i, m in enumerate(meses):
             if m in fecha_str_clean:
                 match_dia = re.search(r'(\d{1,2})', fecha_str_clean)
                 if match_dia:
                     day = int(match_dia.group(1))
+                    # Mapear mes al correcto (1-12)
                     month = i + 1
+                    if m == "jan": month = 1
+                    if m == "apr": month = 4
+                    if m == "aug": month = 8
+                    if m == "dec": month = 12
+                    
                     match_year = re.search(r'(20\d{2})', fecha_str_clean)
                     year = int(match_year.group(1)) if match_year else datetime.now().year
                     try:
@@ -326,12 +336,14 @@ def es_fecha_reciente(fecha_str, dias=28):
         match_year = re.search(r'(20\d{2})', fecha_str_clean)
         if match_year and int(match_year.group(1)) < datetime.now().year:
             return False
-        
-        logger.debug(f"es_fecha_reciente: No se pudo parsear '{fecha_str_clean}', omitiendo por seguridad (estricto)")
-        return False
+            
+        # Si NO podemos entender la fecha en lo absoluto pero no parece vieja (no tiene años ni meses), 
+        # para no perder datos en caso de errores de formato web, la dejamos pasar pero avisamos.
+        logger.debug(f"es_fecha_reciente: Formato desconocido '{fecha_str_clean}'. Se asumirá RECIENTE para no perder posibles datos válidos.")
+        return True
     except Exception as e:
         logger.error(f"Error en es_fecha_reciente: {e}")
-        return False
+        return True
 
 def guardar_en_db(contenido, fuente_id, url, fecha, institucion="OTRO", likes=0, views=0, tipo_texto="publicacion"):
     """Guarda contenido en BD con validaciones de duplicado e institución"""
