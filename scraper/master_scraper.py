@@ -48,6 +48,7 @@ INSTITUCIONES = {
     "UPS": {
         "nombre_completo": "Universidad Politécnica Salesiana",
         "abreviatura": "ups",
+        "tiktok_user": "upsalesianaec",
         "palabras_clave": ["ups", "upscuenca", "politecnica salesiana", "politécnica salesiana", "salesiana"],
         "hashtags": ["upscuenca"],
         "busqueda_nombre": "UPS Cuenca"
@@ -55,6 +56,7 @@ INSTITUCIONES = {
     "UCACUE": {
         "nombre_completo": "Universidad Católica de Cuenca",
         "abreviatura": "ucacue",
+        "tiktok_user": "ucatocuenca",
         "palabras_clave": ["ucacue", "universidad católica", "universidad catolica", "católica cuenca", "catolica cuenca"],
         "hashtags": ["catocorazon", "caucue", "universidadcatolica", "ucacue"],
         "busqueda_nombre": "Católica Cuenca"
@@ -62,6 +64,7 @@ INSTITUCIONES = {
     "UDA": {
         "nombre_completo": "Universidad del Azuay",
         "abreviatura": "uazuay",
+        "tiktok_user": "uazuay",
         "palabras_clave": ["uda", "universidad del azuay", "azuay"],
         "hashtags": ["universidaddelazuay", "uda", "unazuay"],
         "busqueda_nombre": "Universidad del Azuay"
@@ -69,6 +72,7 @@ INSTITUCIONES = {
     "UCUENCA": {
         "nombre_completo": "Universidad de Cuenca",
         "abreviatura": "ucuenca",
+        "tiktok_user": "ucuenca",
         "palabras_clave": ["universidad de cuenca", "u de cuenca", "ucuenca", "udecu"],
         "hashtags": ["universidaddecuenca", "ucuenca", "udecu"],
         "busqueda_nombre": "Universidad de Cuenca"
@@ -345,7 +349,7 @@ def es_fecha_reciente(fecha_str, dias=28):
         logger.error(f"Error en es_fecha_reciente: {e}")
         return True
 
-def guardar_en_db(contenido, fuente_id, url, fecha, institucion="OTRO", likes=0, views=0, tipo_texto="publicacion"):
+def guardar_en_db(contenido, fuente_id, url, fecha, institucion="OTRO", likes=0, views=0, tipo_texto="publicacion", reacciones=None):
     """Guarda contenido en BD con validaciones de duplicado e institución"""
     try:
         # Verificar duplicado ANTES de guardar
@@ -363,15 +367,15 @@ def guardar_en_db(contenido, fuente_id, url, fecha, institucion="OTRO", likes=0,
         if institucion == "OTRO":
             institucion = detectar_institucion(contenido)
         
-        # Si la fecha es "Desconocida" o "Reciente", usar la fecha de hoy como aproximación
-        fecha_final = fecha
-        if fecha in ["Desconocida", "Reciente", ""]:
-            fecha_final = datetime.now().strftime("%Y-%m-%d")
-            logger.debug(f"Fecha no extraída, usando fecha actual: {fecha_final}")
+        # Ya no usamos la fecha actual si falta. Dejamos como Nulo.
+        fecha_final = fecha if fecha not in ["Desconocida", "Reciente", ""] else None
+        
+        import json
+        reacciones_json = json.dumps(reacciones) if reacciones else "{}"
         
         cur.execute(
-            "INSERT INTO narrativas_crudas (contenido_original, fuente_id, url_publicacion, fecha_publicacion, confianza_relevancia, timestamp_extraccion, institucion, likes, views, tipo_texto) VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s)",
-            (contenido, fuente_id, url, fecha_final, 0.75, institucion, likes, views, tipo_texto)
+            "INSERT INTO narrativas_crudas (contenido_original, fuente_id, url_publicacion, fecha_publicacion, confianza_relevancia, timestamp_extraccion, institucion, likes, views, tipo_texto, reacciones) VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s)",
+            (contenido, fuente_id, url, fecha_final, 0.75, institucion, likes, views, tipo_texto, reacciones_json)
         )
         conn.commit()
         cur.close()
@@ -421,7 +425,7 @@ def parse_metric(text):
     except:
         return 0
 
-def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS", fecha="Desconocida", likes=0, views=0, tipo_texto="publicacion"):
+def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS", fecha="Desconocida", likes=0, views=0, tipo_texto="publicacion", reacciones=None):
     """Filtra, valida y guarda textos en BD"""
     guardados = 0
     textos_limpios = textos[1:] if fuente_id == 2 and len(textos) > 1 else textos
@@ -457,7 +461,14 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
     
     logger.debug(f"filtrar_y_guardar: Procesando {len(textos_limpios)} textos para {institucion_objetivo}")
     
-    for idx, texto in enumerate(textos_limpios):
+    for idx, item in enumerate(textos_limpios):
+        if isinstance(item, dict):
+            texto = item.get("texto", "")
+            item_fecha = item.get("fecha", fecha)
+        else:
+            texto = item
+            item_fecha = fecha
+            
         t = texto.strip()
         
         if len(t.split()) < 6:
@@ -500,11 +511,11 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
             
             # Si llegó aquí, debería guardarse
             t_seguro = anonimizar_texto(t)
-            fue_insertado = guardar_en_db(t_seguro, fuente_id, url_origen, fecha, institucion_objetivo, likes, views, tipo_texto)
+            fue_insertado = guardar_en_db(t_seguro, fuente_id, url_origen, item_fecha, institucion_objetivo, likes, views, tipo_texto, reacciones)
             if fue_insertado:
                 # Remover emojis para imprimir (evitar error de encoding)
                 t_sin_emojis = re.sub(r'[^\x00-\x7F]+', '', t_seguro)
-                print(f"[GUARDADO] [{institucion_objetivo}] ({fecha}): {t_sin_emojis[:80]}...")
+                print(f"[GUARDADO] [{institucion_objetivo}] ({item_fecha}): {t_sin_emojis[:80]}...")
                 guardados += 1
             else:
                 logger.debug(f"[{idx}] No se guardó en BD (probablemente duplicado): {t[:60]}")
@@ -531,169 +542,215 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
     
     total_tiktok = 0
     
-    for keyword in PALABRAS_CLAVE_AMPLIACION:
-        query = f"{inst_data['busqueda_nombre']} {keyword}".strip()
-        url_busqueda = f"https://www.tiktok.com/search?q={query.replace(' ', '%20')}"
-        
+    comentarios_interceptados = []
+    
+    def handle_response(response):
         try:
-            logger.info(f"Buscando en TikTok: {query}")
-            page.goto(url_busqueda, timeout=60000)
-        except PlaywrightTimeoutError:
-            logger.error(f"Timeout en TikTok (query: {query})")
-            continue
-        except Exception as e:
-            logger.error(f"Error navegando a TikTok: {str(e)}")
-            continue
-        
-        print(f"\n   Buscando '{query}' en TikTok...")
-        
-        if keyword == "":
-            print("   [CAPTCHA] Si TikTok pide CAPTCHA, resuélvelo (15 segundos).")
-            time.sleep(15)
-        else:
-            time.sleep(5)
-            
-        try:
-            page.wait_for_selector("a[href*='/video/']", timeout=10000)
-        except: pass
-        time.sleep(4)
-        
-        urls_videos = []
-        try:
-            video_links = page.locator("a[href*='/video/']").all()
-            for link in video_links:
-                try:
-                    h = link.get_attribute("href")
-                    if h and "/video/" in h and h not in urls_videos:
-                        urls_videos.append(h)
-                except: continue
+            if "/api/comment/list/" in response.url or "/api/comment/listreply/" in response.url:
+                json_data = response.json()
+                if "comments" in json_data and json_data["comments"]:
+                    for c in json_data["comments"]:
+                        if "text" in c and "create_time" in c:
+                            timestamp_s = int(c["create_time"])
+                            c_date = datetime.fromtimestamp(timestamp_s).strftime("%Y-%m-%d")
+                            comentarios_interceptados.append({
+                                "texto": c["text"],
+                                "fecha": c_date
+                            })
         except: pass
         
-        urls_videos = urls_videos[:8]
-        logger.info(f"Analizando {len(urls_videos)} videos")
+    page.on("response", handle_response)
+    
+    tiktok_user = inst_data.get('tiktok_user')
+    if not tiktok_user:
+        logger.error(f"No hay usuario de TikTok configurado para {institucion}")
+        browser.close()
+        return 0
         
-        for video_url in urls_videos:
+    url_perfil = f"https://www.tiktok.com/@{tiktok_user}"
+    logger.info(f"Navegando al perfil oficial: {url_perfil}")
+    
+    try:
+        page.goto(url_perfil, timeout=60000)
+        time.sleep(5)
+    except Exception as e:
+        logger.error(f"Error navegando al perfil: {e}")
+        browser.close()
+        return 0
+        
+    # Scroll para cargar videos recientes
+    for _ in range(4):
+        page.evaluate("window.scrollBy(0, 1000);")
+        time.sleep(2)
+        
+    videos_data = []
+    try:
+        video_elements = page.locator("div[data-e2e='user-post-item']").all()
+        for el in video_elements:
             try:
-                page.goto(video_url, timeout=30000)
+                link = el.locator("a[href*='/video/']").first.get_attribute("href")
+                views_text = el.locator("strong[data-e2e='video-views']").first.inner_text()
+                if link and link not in [v['url'] for v in videos_data]:
+                    videos_data.append({
+                        "url": link,
+                        "views": parse_metric(views_text)
+                    })
             except: continue
-            time.sleep(5)
-            
-            fecha_publicacion = "Desconocida"
-            omitir_video = False
-            
-            try:
-                # Priorizar atributo aria-label para mejor extracción de fecha
-                fecha_el = page.locator("span[data-e2e*='browser-nickname'] ~ span[aria-label]").first
-                if fecha_el.count() > 0:
-                    attr_date = fecha_el.get_attribute("aria-label")
-                    if attr_date: fecha_publicacion = attr_date
-                
-                if fecha_publicacion == "Desconocida":
-                    elementos_fecha = page.locator("span[data-e2e*='browser-nickname'] ~ span").all_inner_texts()
-                    for txt in elementos_fecha:
-                        if txt and len(txt) > 2:
-                            fecha_publicacion = txt
-                            break
-                            
-                if not es_fecha_reciente(fecha_publicacion):
-                    omitir_video = True
-            except: pass
-
-            likes_count = 0
-            views_count = 0
-            try:
-                like_el = page.locator("strong[data-e2e='like-count']").first
-                if like_el.count() > 0: likes_count = parse_metric(like_el.inner_text())
-                view_el = page.locator("strong[data-e2e='video-views']").first
-                if view_el.count() > 0: views_count = parse_metric(view_el.inner_text())
-            except: pass
-            
-            if omitir_video:
-                logger.info(f"Omitiendo video antiguo ({fecha_publicacion})")
-                continue
-
-            page.evaluate("window.scrollBy(0, 500);")
-            
-            # Primero: Extraer caption/descripción del video (más importante que comentarios)
-            textos_video = []
-            try:
-                # Intentar extraer la descripción del video (puede estar en varios lugares)
-                caption_selectors = [
-                    "h3 ~ div span[dir='auto']",  # Caption principal
-                    "[data-e2e='video-desc'] span",  # Descriptor de video
-                    "h3 ~ div > div span[dir='auto']",  # Variante
-                    "h3 + div span[dir='auto']"  # Otra variante
-                ]
-                
-                for selector in caption_selectors:
-                    try:
-                        txts = page.locator(selector).all_inner_texts()
-                        if txts:
-                            textos_video.extend(txts)
-                            logger.debug(f"TikTok: Extraída descripción con selector '{selector}': {len(txts)} líneas")
-                            break
-                    except:
-                        continue
-                
-                if textos_video:
-                    logger.debug(f"TikTok: Caption extraída ({len(textos_video)} líneas): {' '.join(textos_video)[:80]}")
-                else:
-                    logger.debug(f"TikTok: No se encontró caption en selectores estándar")
-            except Exception as e:
-                logger.warning(f"Error extrayendo caption de TikTok: {e}")
-            
-            # Segundo: Extraer comentarios si existen
-            comentarios = []
-            try:
-                page.wait_for_selector("[data-e2e='comment-level-1'], .comment-text", timeout=5000)
+    except Exception as e:
+        logger.error(f"Error extrayendo videos del perfil: {e}")
+        
+    # Analizar los últimos 20 videos del perfil
+    videos_data = videos_data[:20] 
+    logger.info(f"Se encontraron {len(videos_data)} videos del perfil")
+    
+    # === BÚSQUEDA POR PALABRAS CLAVE ===
+    for kw in PALABRAS_CLAVE_AMPLIACION:
+        query = f"{inst_data['nombre_completo']} {kw}".strip()
+        url_search = f"https://www.tiktok.com/search?q={query.replace(' ', '%20')}"
+        logger.info(f"Buscando en TikTok: '{query}'")
+        try:
+            page.goto(url_search, timeout=40000)
+            time.sleep(4)
+            # Scroll un par de veces
+            for _ in range(3):
+                page.evaluate("window.scrollBy(0, 1000);")
                 time.sleep(2)
-                
-                # Bucle para cargar la mayor cantidad de comentarios posibles
-                for _ in range(10):
-                    page.evaluate("window.scrollBy(0, 800);")
-                    time.sleep(1.5)
-                    try:
-                        # Botones típicos de cargar más en TikTok
-                        btn = page.locator("text='Ver más respuestas', text='View more replies', text='Cargar más comentarios', text='Load more comments'").first
-                        if btn.is_visible(timeout=500):
-                            btn.click()
-                    except: pass
-                
-                comentarios = page.locator("[data-e2e='comment-level-1'], .SpanCommentContent, .comment-text").all_inner_texts()
-                if comentarios:
-                    logger.debug(f"TikTok: {len(comentarios)} comentarios extraídos completamente")
-            except: 
-                logger.debug(f"TikTok: No hay comentarios o timeout cargándolos")
             
-            # Guardar publicacion
-            if textos_video:
-                total_tiktok += filtrar_y_guardar(
-                    textos_video, 
-                    video_url, 
-                    fuente_id=1, 
-                    institucion_objetivo=institucion,
-                    fecha=fecha_publicacion,
-                    likes=likes_count,
-                    views=views_count,
-                    tipo_texto='publicacion'
-                )
-            else:
-                logger.debug(f"TikTok: Video sin texto extraíble")
+            search_elements = page.locator("a[href*='/video/']").all()
+            for el in search_elements:
+                try:
+                    link = el.get_attribute("href")
+                    if link and "/video/" in link and not any(v['url'] == link for v in videos_data):
+                        # En la búsqueda general asignamos views 0 si no lo tenemos a mano
+                        videos_data.append({
+                            "url": link,
+                            "views": 0
+                        })
+                except: continue
+        except Exception as e:
+            logger.error(f"Error en búsqueda TikTok '{query}': {e}")
+            
+    logger.info(f"Total a analizar (Perfil + Búsqueda): {len(videos_data)} videos")
+    
+    for v_data in videos_data:
+        video_url = v_data["url"]
+        views_count = v_data["views"]
+        
+        comentarios_interceptados.clear()
+        
+        try:
+            page.goto(video_url, timeout=30000)
+        except: continue
+        time.sleep(5)
+        
+        # Extraer fecha exacta usando Snowflake ID de TikTok
+        fecha_publicacion = "Desconocida"
+        match_id = re.search(r'/video/(\d+)', video_url)
+        if match_id:
+            try:
+                vid_id = int(match_id.group(1))
+                timestamp_s = vid_id >> 32
+                fecha_exacta = datetime.fromtimestamp(timestamp_s)
+                fecha_publicacion = fecha_exacta.strftime("%Y-%m-%d")
+            except: pass
+            
+        if not es_fecha_reciente(fecha_publicacion):
+            logger.info(f"Omitiendo video antiguo ({fecha_publicacion})")
+            continue
 
-            # Guardar comentarios
-            if comentarios:
-                total_tiktok += filtrar_y_guardar(
-                    comentarios,
-                    video_url,
-                    fuente_id=1,
-                    institucion_objetivo=institucion,
-                    fecha=fecha_publicacion,
-                    likes=0,
-                    views=0,
-                    tipo_texto='comentario'
-                )
+        likes_count = 0
+        try:
+            like_el = page.locator("strong[data-e2e='like-count']").first
+            if like_el.count() > 0: likes_count = parse_metric(like_el.inner_text())
+        except: pass
+
+        page.evaluate("window.scrollBy(0, 500);")
+        
+        # Primero: Extraer caption/descripción del video (más importante que comentarios)
+        textos_video = []
+        try:
+            # Intentar extraer la descripción del video (puede estar en varios lugares)
+            caption_selectors = [
+                "h3 ~ div span[dir='auto']",  # Caption principal
+                "[data-e2e='video-desc'] span",  # Descriptor de video
+                "h3 ~ div > div span[dir='auto']",  # Variante
+                "h3 + div span[dir='auto']"  # Otra variante
+            ]
+            
+            for selector in caption_selectors:
+                try:
+                    txts = page.locator(selector).all_inner_texts()
+                    if txts:
+                        textos_video.extend(txts)
+                        logger.debug(f"TikTok: Extraída descripción con selector '{selector}': {len(txts)} líneas")
+                        break
+                except:
+                    continue
+            
+            if textos_video:
+                logger.debug(f"TikTok: Caption extraída ({len(textos_video)} líneas): {' '.join(textos_video)[:80]}")
             else:
-                logger.debug(f"TikTok: Video sin texto extraíble")
+                logger.debug(f"TikTok: No se encontró caption en selectores estándar")
+        except Exception as e:
+            logger.warning(f"Error extrayendo caption de TikTok: {e}")
+        
+        # Segundo: Extraer comentarios si existen
+        comentarios_finales = []
+        try:
+            page.wait_for_selector("[data-e2e='comment-level-1'], .comment-text", timeout=5000)
+            time.sleep(2)
+            
+            # Bucle para cargar la mayor cantidad de comentarios posibles
+            for _ in range(10):
+                page.evaluate("window.scrollBy(0, 800);")
+                time.sleep(1.5)
+                try:
+                    # Botones típicos de cargar más en TikTok
+                    btn = page.locator("text='Ver más respuestas', text='View more replies', text='Cargar más comentarios', text='Load more comments'").first
+                    if btn.is_visible(timeout=500):
+                        btn.click()
+                except: pass
+            
+            # Priorizamos comentarios interceptados de la red
+            if comentarios_interceptados:
+                comentarios_finales = comentarios_interceptados.copy()
+                logger.debug(f"TikTok: {len(comentarios_finales)} comentarios interceptados vía red con fecha exacta")
+            else:
+                comentarios_finales = page.locator("[data-e2e='comment-level-1'], .SpanCommentContent, .comment-text").all_inner_texts()
+                if comentarios_finales:
+                    logger.debug(f"TikTok: {len(comentarios_finales)} comentarios extraídos visualmente")
+        except: 
+            logger.debug(f"TikTok: No hay comentarios o timeout cargándolos")
+        
+        # Guardar publicacion
+        if textos_video:
+            total_tiktok += filtrar_y_guardar(
+                textos_video, 
+                video_url, 
+                fuente_id=1, 
+                institucion_objetivo=institucion,
+                fecha=fecha_publicacion,
+                likes=likes_count,
+                views=views_count,
+                tipo_texto='publicacion'
+            )
+        else:
+            logger.debug(f"TikTok: Video sin texto extraíble")
+
+        # Guardar comentarios
+        if comentarios_finales:
+            total_tiktok += filtrar_y_guardar(
+                comentarios_finales,
+                video_url,
+                fuente_id=1,
+                institucion_objetivo=institucion,
+                fecha=fecha_publicacion,
+                likes=0,
+                views=0,
+                tipo_texto='comentario'
+            )
+        else:
+            logger.debug(f"TikTok: Video sin texto extraíble")
     
     browser.close()
     logger.info(f"TIKTOK {institucion} FINALIZADO: {total_tiktok} narrativas.")
@@ -719,6 +776,33 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
     
     logger.info(f"Usando sesión guardada para Instagram ({institucion})...")
     time.sleep(2)
+    
+    ig_comentarios_interceptados = []
+    
+    def handle_ig_response(response):
+        try:
+            if "comments" in response.url or "graphql" in response.url:
+                json_data = response.json()
+                def extract_comments_ig(obj):
+                    if isinstance(obj, dict):
+                        if "created_at" in obj and "text" in obj:
+                            try:
+                                timestamp_s = int(obj["created_at"])
+                                c_date = datetime.fromtimestamp(timestamp_s).strftime("%Y-%m-%d")
+                                ig_comentarios_interceptados.append({
+                                    "texto": obj["text"],
+                                    "fecha": c_date
+                                })
+                            except: pass
+                        for k, v in obj.items():
+                            extract_comments_ig(v)
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            extract_comments_ig(item)
+                extract_comments_ig(json_data)
+        except: pass
+        
+    page.on("response", handle_ig_response)
     
     # Construir lista de hashtags base + ampliados
     hashtags_a_buscar = []
@@ -751,6 +835,8 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
         for i in range(8):
             print(f"   -> Revisando post {i+1}/8 de #{hashtag}...")
             url_actual = page.url
+            
+            ig_comentarios_interceptados.clear()
             
             fecha_publicacion = "Desconocida"
             omitir_post = False
@@ -845,6 +931,12 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
                 except Exception as e:
                     logger.warning(f"Error extrayendo comentarios de Instagram: {e}")
                 
+                comentarios_finales = []
+                if ig_comentarios_interceptados:
+                    comentarios_finales = ig_comentarios_interceptados.copy()
+                else:
+                    comentarios_finales = comentarios
+                
                 # Guardar publicacion
                 if textos_post:
                     logger.debug(f"Instagram: Post extraido: {len(textos_post)}")
@@ -853,8 +945,8 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
                     logger.debug(f"Instagram: Post sin texto extraíble")
 
                 # Guardar comentarios
-                if comentarios:
-                    total_ig += filtrar_y_guardar(comentarios, url_actual, fuente_id=2, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario")
+                if comentarios_finales:
+                    total_ig += filtrar_y_guardar(comentarios_finales, url_actual, fuente_id=2, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario")
 
             try:
                 page.keyboard.press("ArrowRight")
@@ -885,6 +977,34 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
     
     logger.info(f"Usando sesión guardada para Facebook ({institucion})...")
     time.sleep(2)
+    
+    fb_comentarios_interceptados = []
+    
+    def handle_fb_response(response):
+        try:
+            if "graphql" in response.url:
+                json_data = response.json()
+                def extract_comments_fb(obj):
+                    if isinstance(obj, dict):
+                        if "created_time" in obj and "body" in obj and isinstance(obj["body"], dict) and "text" in obj["body"]:
+                            try:
+                                timestamp_s = int(obj["created_time"])
+                                c_date = datetime.fromtimestamp(timestamp_s).strftime("%Y-%m-%d")
+                                fb_comentarios_interceptados.append({
+                                    "texto": obj["body"]["text"],
+                                    "fecha": c_date
+                                })
+                            except: pass
+                        for k, v in obj.items():
+                            extract_comments_fb(v)
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            extract_comments_fb(item)
+                
+                extract_comments_fb(json_data)
+        except: pass
+        
+    page.on("response", handle_fb_response)
     
     total_fb = 0
     # --- FILTRO GEOGRÁFICO Y COMERCIAL DE EXCLUSIÓN PARA FB ---
@@ -931,25 +1051,65 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                     if any(exc in txt.lower() for exc in palabras_exclusion):
                         continue
 
-                    fecha_publicacion = "Reciente"
+                    fecha_publicacion = "Desconocida"
                     try:
-                        fecha_el = articulo.locator("a[role='link'][aria-label]").first
-                        if fecha_el.count() > 0:
-                            f_attr = fecha_el.get_attribute('aria-label')
-                            if f_attr and ("202" in f_attr or "hace" in f_attr or "ayer" in f_attr):
-                                fecha_publicacion = f_attr
+                        # Extraer Unix timestamp oculto en HTML (data-utime, data-store)
+                        unix_ts = articulo.evaluate('''el => {
+                            let timeEls = el.querySelectorAll('[data-utime]');
+                            if (timeEls.length > 0) return timeEls[0].getAttribute('data-utime');
+                            let abbrEls = el.querySelectorAll('abbr[data-store]');
+                            if (abbrEls.length > 0) {
+                                try {
+                                    let store = JSON.parse(abbrEls[0].getAttribute('data-store'));
+                                    if (store.time) return store.time;
+                                } catch(e){}
+                            }
+                            return null;
+                        }''')
+                        if unix_ts:
+                            fecha_exacta = datetime.fromtimestamp(int(unix_ts))
+                            fecha_publicacion = fecha_exacta.strftime("%Y-%m-%d")
                     except: pass
+
+                    if fecha_publicacion == "Desconocida":
+                        try:
+                            fecha_el = articulo.locator("a[role='link'][aria-label]").first
+                            if fecha_el.count() > 0:
+                                f_attr = fecha_el.get_attribute('aria-label')
+                                if f_attr and ("202" in f_attr or "hace" in f_attr or "ayer" in f_attr):
+                                    fecha_publicacion = f_attr
+                        except: pass
                     
                     if not es_fecha_reciente(fecha_publicacion):
                         continue
 
                     likes_count = 0
                     views_count = 0
+                    reacciones_dict = {}
                     try:
                         like_el = articulo.locator("span[toolbar='[object Object]'], div[aria-label*='reacciones'], span[aria-label*='reacciones'], div[role='button']:has(img)").first
                         if like_el.count() > 0:
                             l_text = like_el.inner_text() or like_el.get_attribute("aria-label") or "0"
                             likes_count = parse_metric(l_text)
+                            
+                            # Intentar abrir modal de reacciones
+                            try:
+                                like_el.click(timeout=3000)
+                                time.sleep(2)
+                                tabs = page.locator("div[role='dialog'] div[role='tablist'] div[role='tab']").all()
+                                for tab in tabs:
+                                    tab_text = tab.get_attribute("aria-label")
+                                    if tab_text:
+                                        parts = tab_text.split(":")
+                                        if len(parts) == 2:
+                                            key = parts[0].strip().lower().replace(" ", "_")
+                                            val = parse_metric(parts[1].strip())
+                                            reacciones_dict[key] = val
+                                            if key in ['todas', 'all']:
+                                                likes_count = val
+                                page.keyboard.press("Escape")
+                                time.sleep(1)
+                            except: pass
                         
                         view_el = articulo.locator("span:has-text('reproducciones'), span:has-text('views')").first
                         if view_el.count() > 0:
@@ -965,6 +1125,7 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                     except: pass
 
                     # EXPANDIR COMENTARIOS
+                    fb_comentarios_interceptados.clear()
                     try:
                         btn_comentarios = articulo.locator("div[role='button']:has-text('comentario'), div[role='button']:has-text('comment')").first
                         if btn_comentarios.is_visible(timeout=1000):
@@ -984,11 +1145,16 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                     textos = articulo.locator("div[dir='auto']").all_inner_texts()
                     if textos:
                         publicacion = [textos[0]]
-                        comentarios = textos[1:]
                         
-                        total_fb += filtrar_y_guardar(publicacion, url_fb, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion")
-                        if comentarios:
-                            total_fb += filtrar_y_guardar(comentarios, url_fb, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario")
+                        comentarios_finales = []
+                        if fb_comentarios_interceptados:
+                            comentarios_finales = fb_comentarios_interceptados.copy()
+                        else:
+                            comentarios_finales = textos[1:]
+                        
+                        total_fb += filtrar_y_guardar(publicacion, url_fb, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion", reacciones=reacciones_dict)
+                        if comentarios_finales:
+                            total_fb += filtrar_y_guardar(comentarios_finales, url_fb, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario")
                 except: continue
             
         except Exception as e:
