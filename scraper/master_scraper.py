@@ -1092,21 +1092,25 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                     views_count = 0
                     reacciones_dict = {}
                     try:
-                        like_el = articulo.locator("span[toolbar='[object Object]'], div[aria-label*='reacciones'], span[aria-label*='reacciones'], div[role='button']:has(img)").first
+                        # Seleccionamos el contenedor que muestra el número de likes
+                        like_el = articulo.locator("span[toolbar='[object Object]'], div[role='button']:has(img), span:has(div[aria-label*='reacciones']), div[role='button']").filter(has_text=re.compile(r'^\d+$|^\d+[KkMm]$')).first
+                        if like_el.count() == 0:
+                            like_el = articulo.locator("div[role='button']:has(img)").first
+                            
                         if like_el.count() > 0:
                             l_text = like_el.inner_text() or like_el.get_attribute("aria-label") or "0"
                             likes_count = parse_metric(l_text)
                             
-                            # Intentar abrir modal de reacciones
+                            # Intentar abrir modal de reacciones forzando el clic para esquivar overlays
                             try:
-                                like_el.click(timeout=3000)
-                                time.sleep(2)
+                                like_el.click(timeout=3000, force=True)
+                                page.wait_for_selector("div[role='dialog'] div[role='tablist']", timeout=3000)
                                 tabs = page.locator("div[role='dialog'] div[role='tablist'] div[role='tab']").all()
                                 for tab in tabs:
                                     tab_text = tab.get_attribute("aria-label")
                                     if tab_text:
                                         parts = tab_text.split(":")
-                                        if len(parts) == 2:
+                                        if len(parts) >= 2:
                                             key = parts[0].strip().lower().replace(" ", "_")
                                             val = parse_metric(parts[1].strip())
                                             reacciones_dict[key] = val
