@@ -258,8 +258,11 @@ def registrar_hash_procesado(contenido):
 def es_fecha_reciente(fecha_str, dias=28):
     """Verifica si una fecha es reciente (últimos N días)"""
     try:
-        if not fecha_str or str(fecha_str).strip().lower() in ["desconocida", "reciente", ""]:
-            logger.debug("es_fecha_reciente: Sin fecha, asumiendo reciente")
+        if not fecha_str or str(fecha_str).strip().lower() in ["desconocida", ""]:
+            logger.debug("es_fecha_reciente: Sin fecha, rechazando por límite estricto de 4 semanas")
+            return False
+            
+        if str(fecha_str).strip().lower() == "reciente":
             return True
             
         fecha_str_clean = str(fecha_str).strip().lower()
@@ -988,12 +991,14 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                     if isinstance(obj, dict):
                         if "created_time" in obj and "body" in obj and isinstance(obj["body"], dict) and "text" in obj["body"]:
                             try:
-                                timestamp_s = int(obj["created_time"])
-                                c_date = datetime.fromtimestamp(timestamp_s).strftime("%Y-%m-%d")
-                                fb_comentarios_interceptados.append({
-                                    "texto": obj["body"]["text"],
-                                    "fecha": c_date
-                                })
+                                texto_val = obj["body"]["text"]
+                                if texto_val and len(str(texto_val).strip()) > 0:
+                                    timestamp_s = int(obj["created_time"])
+                                    c_date = datetime.fromtimestamp(timestamp_s).strftime("%Y-%m-%d")
+                                    fb_comentarios_interceptados.append({
+                                        "texto": texto_val,
+                                        "fecha": c_date
+                                    })
                             except: pass
                         for k, v in obj.items():
                             extract_comments_fb(v)
@@ -1142,6 +1147,16 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                                 break
                     except: pass
 
+                    post_url = url_fb
+                    try:
+                        extracted_url = articulo.evaluate('''el => {
+                            let links = Array.from(el.querySelectorAll("a[href]"));
+                            let postLink = links.find(a => a.href.includes('/posts/') || a.href.includes('/videos/') || a.href.includes('/permalink/') || a.href.includes('fbid='));
+                            return postLink ? postLink.href : null;
+                        }''')
+                        if extracted_url: post_url = extracted_url
+                    except: pass
+
                     textos = articulo.locator("div[dir='auto']").all_inner_texts()
                     if textos:
                         publicacion = [textos[0]]
@@ -1152,9 +1167,9 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                         else:
                             comentarios_finales = textos[1:]
                         
-                        total_fb += filtrar_y_guardar(publicacion, url_fb, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion", reacciones=reacciones_dict)
+                        total_fb += filtrar_y_guardar(publicacion, post_url, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion", reacciones=reacciones_dict)
                         if comentarios_finales:
-                            total_fb += filtrar_y_guardar(comentarios_finales, url_fb, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario")
+                            total_fb += filtrar_y_guardar(comentarios_finales, post_url, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario")
                 except: continue
             
         except Exception as e:
