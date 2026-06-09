@@ -1081,7 +1081,7 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                             fecha_el = articulo.locator("a[role='link'][aria-label]").first
                             if fecha_el.count() > 0:
                                 f_attr = fecha_el.get_attribute('aria-label')
-                                if f_attr and ("202" in f_attr or "hace" in f_attr or "ayer" in f_attr):
+                                if f_attr and len(f_attr) > 2:
                                     fecha_publicacion = f_attr
                         except: pass
                     
