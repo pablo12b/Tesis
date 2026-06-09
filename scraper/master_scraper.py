@@ -474,11 +474,11 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
             
         t = texto.strip()
         
-        if len(t.split()) < 6:
+        if len(t.split()) < 3:
             logger.debug(f"[{idx}] Omitiendo - muy corto ({len(t.split())} palabras): {t[:40]}")
             continue
             
-        if len(t) > 10:
+        if len(t) > 5:
             t_lower = t.lower()
             
             # Limpiar emojis ANTES de toda búsqueda
@@ -495,18 +495,13 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
                 logger.debug(f"[{idx}] Omitiendo - ciudad excluida")
                 continue
                 
-            # Contar palabras emocionales (requiere MÍNIMO 1)
+            # Contar palabras emocionales (informativo, ya no es requisito excluyente)
             conteo_emocional = 0
             palabras_encontradas = []
             for palabra in palabras_emocionales:
                 if re.search(r'\b' + re.escape(palabra) + r'\b', t_clean_lower):
                     conteo_emocional += 1
                     palabras_encontradas.append(palabra)
-            
-            # Filtro: mínimo 1 palabra emocional encontrada
-            if conteo_emocional < 1:
-                logger.debug(f"[{idx}] Omitiendo - SIN PALABRA EMOCIONAL: {t[:60]}")
-                continue
             
             if any(exc in t_clean_lower for exc in palabras_basura):
                 logger.debug(f"[{idx}] Omitiendo - palabra basura encontrada")
@@ -714,14 +709,24 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
                         btn.click()
                 except: pass
             
-            # Priorizamos comentarios interceptados de la red
-            if comentarios_interceptados:
-                comentarios_finales = comentarios_interceptados.copy()
-                logger.debug(f"TikTok: {len(comentarios_finales)} comentarios interceptados vía red con fecha exacta")
-            else:
-                comentarios_finales = page.locator("[data-e2e='comment-level-1'], .SpanCommentContent, .comment-text").all_inner_texts()
-                if comentarios_finales:
-                    logger.debug(f"TikTok: {len(comentarios_finales)} comentarios extraídos visualmente")
+            comentarios_visuales = []
+            try:
+                comentarios_visuales = page.locator("[data-e2e='comment-level-1'], .SpanCommentContent, .comment-text").all_inner_texts()
+            except: pass
+            
+            interceptados_textos = [c["texto"] for c in comentarios_interceptados]
+            
+            for c_text in comentarios_visuales:
+                if c_text not in interceptados_textos:
+                    comentarios_finales.append({
+                        "texto": c_text,
+                        "fecha": fecha_publicacion
+                    })
+                    
+            for c_inter in comentarios_interceptados:
+                comentarios_finales.append(c_inter)
+                
+            logger.debug(f"TikTok: {len(comentarios_finales)} comentarios totales consolidados")
         except: 
             logger.debug(f"TikTok: No hay comentarios o timeout cargándolos")
         
@@ -935,10 +940,17 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
                     logger.warning(f"Error extrayendo comentarios de Instagram: {e}")
                 
                 comentarios_finales = []
-                if ig_comentarios_interceptados:
-                    comentarios_finales = ig_comentarios_interceptados.copy()
-                else:
-                    comentarios_finales = comentarios
+                interceptados_textos = [c["texto"] for c in ig_comentarios_interceptados]
+                
+                for c_text in comentarios:
+                    if c_text not in interceptados_textos:
+                        comentarios_finales.append({
+                            "texto": c_text,
+                            "fecha": fecha_publicacion
+                        })
+                        
+                for c_inter in ig_comentarios_interceptados:
+                    comentarios_finales.append(c_inter)
                 
                 # Guardar publicacion
                 if textos_post:
