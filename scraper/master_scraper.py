@@ -58,7 +58,7 @@ INSTITUCIONES = {
         "abreviatura": "ucacue",
         "tiktok_user": "ucatocuenca",
         "palabras_clave": ["ucacue", "universidad católica", "universidad catolica", "católica cuenca", "catolica cuenca"],
-        "hashtags": ["catocorazon", "caucue", "universidadcatolica", "ucacue"],
+        "hashtags": ["catocorazon", "caucue", "ucacue"],
         "busqueda_nombre": "Católica Cuenca"
     },
     "UDA": {
@@ -82,7 +82,7 @@ INSTITUCIONES = {
 PALABRAS_CLAVE_AMPLIACION = ["", "alerta", "urgente", "difundir", "denuncia", "ayuda", "viral", "problemas"]
 
 CIUDADES_A_EXCLUIR = [
-    "guayaquil", "gye", "quito", "uio", "oaxaca", "canarias", "méxico", "mexico", "españa"
+    "oaxaca", "canarias", "méxico", "mexico", "españa", "chile", "colombia", "peru", "perú", "argentina"
 ]
 
 palabras_emocionales = [
@@ -484,6 +484,17 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
             # Limpiar emojis ANTES de toda búsqueda
             t_clean = re.sub(r'[^\x00-\x7F]', '', t_lower)
             t_clean_lower = t_clean.lower()
+            
+            # Filtrar elementos de UI basura que entran como comentarios
+            if tipo_texto == "comentario":
+                if t_clean_lower in ["me gusta", "responder", "compartir", "ocultar", "ver traducción"]:
+                    continue
+                if re.match(r'^hace\s+\d+\s+(días?|horas?|minutos?|semanas?|meses?|años?)$', t_clean_lower):
+                    continue
+                if re.match(r'^\d+\s+me gusta$', t_clean_lower):
+                    continue
+                if t_clean_lower.startswith("les gusta a ") or t_clean_lower.startswith("sé el primero en indicar"):
+                    continue
             
             # Excluir narrativas de OTRAS instituciones
             if any(palabra_excluir in t_clean_lower for palabra_excluir in palabras_clave_excluir):
