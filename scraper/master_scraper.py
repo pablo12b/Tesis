@@ -1081,8 +1081,9 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                             fecha_el = articulo.locator("a[role='link'][aria-label]").first
                             if fecha_el.count() > 0:
                                 f_attr = fecha_el.get_attribute('aria-label')
-                                if f_attr and len(f_attr) > 2:
-                                    fecha_publicacion = f_attr
+                                if f_attr and 2 < len(f_attr) < 40:
+                                    if re.search(r'\d', f_attr) or any(w in f_attr.lower() for w in ["hace", "ayer", "hoy"]):
+                                        fecha_publicacion = f_attr
                         except: pass
                     
                     if not es_fecha_reciente(fecha_publicacion):
@@ -1166,10 +1167,19 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                         publicacion = [textos[0]]
                         
                         comentarios_finales = []
-                        if fb_comentarios_interceptados:
-                            comentarios_finales = fb_comentarios_interceptados.copy()
-                        else:
-                            comentarios_finales = textos[1:]
+                        interceptados_textos = [c["texto"] for c in fb_comentarios_interceptados]
+                        
+                        # Agregar comentarios visuales que no hayan sido interceptados por red
+                        for c_text in textos[1:]:
+                            if c_text not in interceptados_textos:
+                                comentarios_finales.append({
+                                    "texto": c_text,
+                                    "fecha": fecha_publicacion
+                                })
+                                
+                        # Agregar comentarios interceptados (con fechas exactas)
+                        for c_inter in fb_comentarios_interceptados:
+                            comentarios_finales.append(c_inter)
                         
                         total_fb += filtrar_y_guardar(publicacion, post_url, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion", reacciones=reacciones_dict)
                         if comentarios_finales:
