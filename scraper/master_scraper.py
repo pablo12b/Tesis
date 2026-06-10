@@ -66,7 +66,7 @@ INSTITUCIONES = {
         "abreviatura": "uazuay",
         "tiktok_user": "uazuay",
         "palabras_clave": ["uda", "universidad del azuay", "azuay"],
-        "hashtags": ["universidaddelazuay", "uda", "unazuay"],
+        "hashtags": ["universidaddelazuay", "unazuay"],
         "busqueda_nombre": "Universidad del Azuay"
     },
     "UCUENCA": {
@@ -487,14 +487,29 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
             
             # Filtrar elementos de UI basura que entran como comentarios
             if tipo_texto == "comentario":
+                # Normalizar espacios para evitar fallos por saltos de línea o espacios invisibles (nbsp)
+                t_norm = re.sub(r'\s+', ' ', t_lower).strip()
+                
                 ui_exacts = ["me gusta", "responder", "compartir", "ocultar", "ver traducción", "ver traduccion"]
-                if t_lower in ui_exacts or t_clean_lower in ui_exacts:
+                if t_norm in ui_exacts:
                     continue
-                if re.match(r'^hace\s+\d+\s+(días?|horas?|minutos?|semanas?|meses?|años?|dias?|anos?)$', t_lower):
+                if re.match(r'^hace\s+\d+\s+(días?|horas?|minutos?|semanas?|meses?|años?|dias?|anos?)$', t_norm):
                     continue
-                if re.match(r'^\d+\s+me gusta$', t_lower):
+                if re.match(r'^\d+\s+me gusta$', t_norm):
                     continue
-                if t_lower.startswith("les gusta a ") or t_lower.startswith("sé el primero en indicar") or t_lower.startswith("se el primero en indicar"):
+                if re.match(r'^\d+\s+comentarios?(?:\s+de\s+facebook)?$', t_norm):
+                    continue
+                if t_norm.startswith("les gusta a ") or t_norm.startswith("sé el primero en indicar") or t_norm.startswith("se el primero en indicar"):
+                    continue
+                    
+                # Excluir nombres de las propias universidades que a veces entran como comentario
+                skip_inst = False
+                for inst_data in INSTITUCIONES.values():
+                    nombre = inst_data['nombre_completo'].lower()
+                    if t_norm == nombre or t_norm == f"{nombre} - ecuador":
+                        skip_inst = True
+                        break
+                if skip_inst:
                     continue
             
             # Excluir narrativas de OTRAS instituciones
