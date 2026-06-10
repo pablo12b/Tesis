@@ -487,13 +487,14 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
             
             # Filtrar elementos de UI basura que entran como comentarios
             if tipo_texto == "comentario":
-                if t_clean_lower in ["me gusta", "responder", "compartir", "ocultar", "ver traducción"]:
+                ui_exacts = ["me gusta", "responder", "compartir", "ocultar", "ver traducción", "ver traduccion"]
+                if t_lower in ui_exacts or t_clean_lower in ui_exacts:
                     continue
-                if re.match(r'^hace\s+\d+\s+(días?|horas?|minutos?|semanas?|meses?|años?)$', t_clean_lower):
+                if re.match(r'^hace\s+\d+\s+(días?|horas?|minutos?|semanas?|meses?|años?|dias?|anos?)$', t_lower):
                     continue
-                if re.match(r'^\d+\s+me gusta$', t_clean_lower):
+                if re.match(r'^\d+\s+me gusta$', t_lower):
                     continue
-                if t_clean_lower.startswith("les gusta a ") or t_clean_lower.startswith("sé el primero en indicar"):
+                if t_lower.startswith("les gusta a ") or t_lower.startswith("sé el primero en indicar") or t_lower.startswith("se el primero en indicar"):
                     continue
             
             # Excluir narrativas de OTRAS instituciones
@@ -1101,12 +1102,16 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
 
                     if fecha_publicacion == "Desconocida":
                         try:
-                            fecha_el = articulo.locator("a[role='link'][aria-label]").first
-                            if fecha_el.count() > 0:
-                                f_attr = fecha_el.get_attribute('aria-label')
+                            # Iterar sobre los enlaces porque el primero suele ser el nombre de la página
+                            fecha_els = articulo.locator("a[role='link'][aria-label]").all()
+                            for el in fecha_els:
+                                f_attr = el.get_attribute('aria-label')
                                 if f_attr and 2 < len(f_attr) < 40:
-                                    if re.search(r'\d', f_attr) or any(w in f_attr.lower() for w in ["hace", "ayer", "hoy"]):
+                                    f_lower = f_attr.lower()
+                                    # Verificar que tenga palabras explícitas de tiempo para no agarrar el nombre de la página
+                                    if any(w in f_lower for w in ["hace ", "ayer", "hoy", " de ene", " de feb", " de mar", " de abr", " de may", " de jun", " de jul", " de ago", " de sep", " de oct", " de nov", " de dic"]):
                                         fecha_publicacion = f_attr
+                                        break
                         except: pass
                     
                     if not es_fecha_reciente(fecha_publicacion):
