@@ -428,38 +428,14 @@ def parse_metric(text):
     except:
         return 0
 
-def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS", fecha="Desconocida", likes=0, views=0, tipo_texto="publicacion", reacciones=None):
+def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS", fecha="Desconocida", likes=0, views=0, tipo_texto="publicacion", reacciones=None, forzar_guardado=False):
     """Filtra, valida y guarda textos en BD"""
     guardados = 0
-    textos_limpios = textos[1:] if fuente_id == 2 and len(textos) > 1 else textos
+    textos_limpios = textos
     
     palabras_clave_excluir = obtener_palabras_clave_excluir(institucion_objetivo)
     
     palabras_basura = [
-        "asesoría", "servicio garantizado", "cotiza", "envíos", "ventas", 
-        "perro", "perrito", "mascota", "adopción", "oportunidad de trabajo", 
-        "empleo", "vacante", "requiere contratar", "asambleísta", "hospital",
-        "compra", "vendo", "se busca", "se extravió", "se extravio",
-        "migrante", "migrantes", "desaparecido", "desaparecida", "desaparecidos",
-        "auspicio", "auspiciado", "lasso", "yaku", "correa", "noboa",
-        "candidato", "excandidato", "presidente de la república", "pandora papers",
-        "veterinaria", "vete ", "veterinario", "inscripción", "inscripciones", "admisiones", 
-        "oferta académica", "matrículas", "matricula", "vacuna", "vacunación", "dosis", "paro nacional",
-        "estados unidos", "eeuu", "ee.uu.", "viaje irregular",
-        "no pierdas esta oportunidad", "prepara tu proyecto", "concurso",
-        "estudia ", "dispositivo", "no videntes", "copadonbosco", "torneo", "ambulancia",
-        "paronacional", "otavalo", "detenida", "caricaturista", "un estudio", "investigadores",
-        "gobierno", "despidos", "homicidios", "hambre", "fundaciones", "donantes",
-        "democracia", "autoritaria", "pandorapapers", "carondelet", "boicot", "upc",
-        # Términos administrativos/informativos (NO emocionales)
-        "proyecto", "proyectos", "trabajo académico", "tarea", "tareas", "plazo", "plazos",
-        "deadline", "responsabilidad", "obligación", "horario", "calendario", "período",
-        "semestre", "créditos", "calificación", "calificaciones", "nota", "notas",
-        "reprobación", "aprobación", "costo", "precio", "beca", "becado", "becada",
-        "carrera", "programa", "clase", "clases", "aula", "aulas", "campus", "edificio",
-        "laboratorio", "biblioteca", "dirección", "administrativo", "administrativos",
-        "sistema", "plataforma", "formulario", "requisito", "requisitos",
-        "tercera matrícula", "registro de asignaturas", "se realiza", "se encuentra"
     ]
     
     logger.debug(f"filtrar_y_guardar: Procesando {len(textos_limpios)} textos para {institucion_objetivo}")
@@ -474,35 +450,34 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
             
         t = texto.strip()
         
-        if len(t.split()) < 3:
-            logger.debug(f"[{idx}] Omitiendo - muy corto ({len(t.split())} palabras): {t[:40]}")
+        if not t:
             continue
-            
-        if len(t) > 5:
+
+        if len(t) > 1 or forzar_guardado:
             t_lower = t.lower()
             
             # Limpiar emojis ANTES de toda búsqueda
             t_clean = re.sub(r'[^\x00-\x7F]', '', t_lower)
             t_clean_lower = t_clean.lower()
             
-            # Filtrar elementos de UI basura que entran como comentarios
-            if tipo_texto == "comentario":
-                # Normalizar espacios para evitar fallos por saltos de línea o espacios invisibles (nbsp)
-                t_norm = re.sub(r'\s+', ' ', t_lower).strip()
+            # Filtrar elementos de UI basura que entran como texto
+            # Normalizar espacios para evitar fallos por saltos de línea o espacios invisibles (nbsp)
+            t_norm = re.sub(r'\s+', ' ', t_lower).strip()
+            
+            ui_exacts = ["me gusta", "responder", "compartir", "ocultar", "ver traducción", "ver traduccion"]
+            if t_norm in ui_exacts:
+                continue
+            if re.match(r'^hace\s+(?:\d+|un|una)\s+(días?|horas?|minutos?|semanas?|meses?|años?|dias?|anos?)$', t_norm):
+                continue
+            if re.match(r'^[\d\.,kmKM]+\s+me gusta$', t_norm):
+                continue
+            if re.match(r'^[\d\.,kmKM]+\s+comentarios?(?:\s+de\s+facebook)?$', t_norm):
+                continue
+            if t_norm.startswith("les gusta a ") or t_norm.startswith("sé el primero en indicar") or t_norm.startswith("se el primero en indicar"):
+                continue
                 
-                ui_exacts = ["me gusta", "responder", "compartir", "ocultar", "ver traducción", "ver traduccion"]
-                if t_norm in ui_exacts:
-                    continue
-                if re.match(r'^hace\s+\d+\s+(días?|horas?|minutos?|semanas?|meses?|años?|dias?|anos?)$', t_norm):
-                    continue
-                if re.match(r'^\d+\s+me gusta$', t_norm):
-                    continue
-                if re.match(r'^\d+\s+comentarios?(?:\s+de\s+facebook)?$', t_norm):
-                    continue
-                if t_norm.startswith("les gusta a ") or t_norm.startswith("sé el primero en indicar") or t_norm.startswith("se el primero en indicar"):
-                    continue
-                    
-                # Excluir nombres de las propias universidades que a veces entran como comentario
+            if not forzar_guardado:
+                # Excluir nombres de las propias universidades que a veces entran como comentario o texto
                 skip_inst = False
                 for inst_data in INSTITUCIONES.values():
                     nombre = inst_data['nombre_completo'].lower()
@@ -511,17 +486,22 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
                         break
                 if skip_inst:
                     continue
-            
-            # Excluir narrativas de OTRAS instituciones
-            if any(palabra_excluir in t_clean_lower for palabra_excluir in palabras_clave_excluir):
-                logger.debug(f"[{idx}] Omitiendo - otra institución")
-                continue
-            
-            # Excluir ciudades
-            if any(ciudad in t_clean_lower for ciudad in CIUDADES_A_EXCLUIR):
-                logger.debug(f"[{idx}] Omitiendo - ciudad excluida")
-                continue
+
                 
+                # Excluir narrativas de OTRAS instituciones
+                if any(palabra_excluir in t_clean_lower for palabra_excluir in palabras_clave_excluir):
+                    logger.debug(f"[{idx}] Omitiendo - otra institución")
+                    continue
+                
+                # Excluir ciudades
+                if any(ciudad in t_clean_lower for ciudad in CIUDADES_A_EXCLUIR):
+                    logger.debug(f"[{idx}] Omitiendo - ciudad excluida")
+                    continue
+                    
+                if any(exc in t_clean_lower for exc in palabras_basura):
+                    logger.debug(f"[{idx}] Omitiendo - palabra basura encontrada")
+                    continue
+            
             # Contar palabras emocionales (informativo, ya no es requisito excluyente)
             conteo_emocional = 0
             palabras_encontradas = []
@@ -530,17 +510,13 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
                     conteo_emocional += 1
                     palabras_encontradas.append(palabra)
             
-            if any(exc in t_clean_lower for exc in palabras_basura):
-                logger.debug(f"[{idx}] Omitiendo - palabra basura encontrada")
-                continue
-            
             # Si llegó aquí, debería guardarse
             t_seguro = anonimizar_texto(t)
             fue_insertado = guardar_en_db(t_seguro, fuente_id, url_origen, item_fecha, institucion_objetivo, likes, views, tipo_texto, reacciones)
             if fue_insertado:
                 # Remover emojis para imprimir (evitar error de encoding)
                 t_sin_emojis = re.sub(r'[^\x00-\x7F]+', '', t_seguro)
-                print(f"[GUARDADO] [{institucion_objetivo}] ({item_fecha}): {t_sin_emojis[:80]}...")
+                print(f"[GUARDADO] [{institucion_objetivo}] [{tipo_texto.upper()}] ({item_fecha}): {t_sin_emojis[:80]}...")
                 guardados += 1
             else:
                 logger.debug(f"[{idx}] No se guardó en BD (probablemente duplicado): {t[:60]}")
@@ -560,10 +536,17 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
     logger.info(f"\n{'='*60}")
     logger.info(f"INICIANDO TIKTOK PARA: {inst_data['nombre_completo']}")
     logger.info(f"{'='*60}")
+    # Usar contexto persistente para reutilizar sesiones guardadas y evitar bloqueos de TikTok
+    ruta_perfil = os.path.abspath("./playwright_profile")
+    browser = p.chromium.launch_persistent_context(
+        user_data_dir=ruta_perfil,
+        headless=False,
+        args=["--disable-blink-features=AutomationControlled", "--disable-notifications"]
+    )
+    page = browser.pages[0] if browser.pages else browser.new_page()
     
-    browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
-    context = browser.new_context()
-    page = context.new_page()
+    logger.info(f"Usando sesión guardada para TikTok ({institucion})...")
+    time.sleep(2)
     
     total_tiktok = 0
     
@@ -663,12 +646,7 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
         
         comentarios_interceptados.clear()
         
-        try:
-            page.goto(video_url, timeout=30000)
-        except: continue
-        time.sleep(5)
-        
-        # Extraer fecha exacta usando Snowflake ID de TikTok
+        # Extraer fecha exacta usando Snowflake ID de TikTok antes de cargar la página
         fecha_publicacion = "Desconocida"
         match_id = re.search(r'/video/(\d+)', video_url)
         if match_id:
@@ -682,6 +660,13 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
         if not es_fecha_reciente(fecha_publicacion):
             logger.info(f"Omitiendo video antiguo ({fecha_publicacion})")
             continue
+            
+        comentarios_interceptados.clear()
+        
+        try:
+            page.goto(video_url, timeout=30000)
+        except: continue
+        time.sleep(5)
 
         likes_count = 0
         try:
@@ -721,6 +706,7 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
         
         # Segundo: Extraer comentarios si existen
         comentarios_finales = []
+        comentarios_visuales = []
         try:
             page.wait_for_selector("[data-e2e='comment-level-1'], .comment-text", timeout=5000)
             time.sleep(2)
@@ -736,44 +722,49 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
                         btn.click()
                 except: pass
             
-            comentarios_visuales = []
             try:
                 comentarios_visuales = page.locator("[data-e2e='comment-level-1'], .SpanCommentContent, .comment-text").all_inner_texts()
             except: pass
-            
-            interceptados_textos = [c["texto"] for c in comentarios_interceptados]
-            
-            for c_text in comentarios_visuales:
-                if c_text not in interceptados_textos:
-                    comentarios_finales.append({
-                        "texto": c_text,
-                        "fecha": fecha_publicacion
-                    })
-                    
-            for c_inter in comentarios_interceptados:
-                comentarios_finales.append(c_inter)
-                
-            logger.debug(f"TikTok: {len(comentarios_finales)} comentarios totales consolidados")
         except: 
-            logger.debug(f"TikTok: No hay comentarios o timeout cargándolos")
+            logger.debug(f"TikTok: No hay comentarios visuales o timeout cargándolos")
+            
+        interceptados_textos = [c["texto"] for c in comentarios_interceptados]
+        
+        for c_text in comentarios_visuales:
+            if c_text not in interceptados_textos:
+                comentarios_finales.append({
+                    "texto": c_text,
+                    "fecha": fecha_publicacion
+                })
+                
+        for c_inter in comentarios_interceptados:
+            comentarios_finales.append(c_inter)
+            
+        logger.debug(f"TikTok: {len(comentarios_finales)} comentarios totales consolidados")
         
         # Guardar publicacion
+        publicacion_guardada = False
         if textos_video:
-            total_tiktok += filtrar_y_guardar(
-                textos_video, 
-                video_url, 
-                fuente_id=1, 
-                institucion_objetivo=institucion,
-                fecha=fecha_publicacion,
-                likes=likes_count,
-                views=views_count,
-                tipo_texto='publicacion'
-            )
+            texto_unido = "\n".join(textos_video).strip()
+            if texto_unido:
+                guardados_pub = filtrar_y_guardar(
+                    [texto_unido], 
+                    video_url, 
+                    fuente_id=1, 
+                    institucion_objetivo=institucion,
+                    fecha=fecha_publicacion,
+                    likes=likes_count,
+                    views=views_count,
+                    tipo_texto='publicacion'
+                )
+                if guardados_pub > 0:
+                    publicacion_guardada = True
+                    total_tiktok += guardados_pub
         else:
             logger.debug(f"TikTok: Video sin texto extraíble")
 
         # Guardar comentarios
-        if comentarios_finales:
+        if publicacion_guardada and comentarios_finales:
             total_tiktok += filtrar_y_guardar(
                 comentarios_finales,
                 video_url,
@@ -782,10 +773,13 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
                 fecha=fecha_publicacion,
                 likes=0,
                 views=0,
-                tipo_texto='comentario'
+                tipo_texto='comentario',
+                forzar_guardado=True
             )
+        elif not publicacion_guardada:
+            logger.debug(f"TikTok: No se guardan comentarios porque la publicación no fue guardada")
         else:
-            logger.debug(f"TikTok: Video sin texto extraíble")
+            logger.debug(f"TikTok: Video sin comentarios")
     
     browser.close()
     logger.info(f"TIKTOK {institucion} FINALIZADO: {total_tiktok} narrativas.")
@@ -955,8 +949,7 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
                         try:
                             coms = page.locator(selector).all_inner_texts()
                             if coms:
-                                # Filtrar comentarios cortos (< 6 palabras)
-                                coms_validos = [c.strip() for c in coms if len(c.strip().split()) >= 6]
+                                coms_validos = [c.strip() for c in coms if len(c.strip()) > 1]
                                 if coms_validos:
                                     comentarios.extend(coms_validos)
                                     logger.debug(f"Instagram: {len(coms_validos)} comentarios extraídos")
@@ -980,15 +973,23 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
                     comentarios_finales.append(c_inter)
                 
                 # Guardar publicacion
+                publicacion_guardada = False
                 if textos_post:
                     logger.debug(f"Instagram: Post extraido: {len(textos_post)}")
-                    total_ig += filtrar_y_guardar(textos_post, url_actual, fuente_id=2, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion")
+                    texto_unido = "\n".join(textos_post).strip()
+                    if texto_unido:
+                        guardados_pub = filtrar_y_guardar([texto_unido], url_actual, fuente_id=2, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion")
+                        if guardados_pub > 0:
+                            publicacion_guardada = True
+                            total_ig += guardados_pub
                 else:
                     logger.debug(f"Instagram: Post sin texto extraíble")
 
                 # Guardar comentarios
-                if comentarios_finales:
-                    total_ig += filtrar_y_guardar(comentarios_finales, url_actual, fuente_id=2, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario")
+                if publicacion_guardada and comentarios_finales:
+                    total_ig += filtrar_y_guardar(comentarios_finales, url_actual, fuente_id=2, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario", forzar_guardado=True)
+                elif not publicacion_guardada:
+                    logger.debug(f"Instagram: No se guardan comentarios porque la publicación no fue guardada")
 
             try:
                 page.keyboard.press("ArrowRight")
@@ -1205,7 +1206,7 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                         if extracted_url: post_url = extracted_url
                     except: pass
 
-                    textos = articulo.locator("div[dir='auto']").all_inner_texts()
+                    textos = articulo.locator("div[dir='auto'], span[dir='auto']").all_inner_texts()
                     if textos:
                         publicacion = [textos[0]]
                         
@@ -1224,9 +1225,14 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                         for c_inter in fb_comentarios_interceptados:
                             comentarios_finales.append(c_inter)
                         
-                        total_fb += filtrar_y_guardar(publicacion, post_url, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion", reacciones=reacciones_dict)
-                        if comentarios_finales:
-                            total_fb += filtrar_y_guardar(comentarios_finales, post_url, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario")
+                        publicacion_guardada = False
+                        guardados_pub = filtrar_y_guardar(publicacion, post_url, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=likes_count, views=views_count, tipo_texto="publicacion", reacciones=reacciones_dict)
+                        if guardados_pub > 0:
+                            publicacion_guardada = True
+                            total_fb += guardados_pub
+                            
+                        if publicacion_guardada and comentarios_finales:
+                            total_fb += filtrar_y_guardar(comentarios_finales, post_url, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario", forzar_guardado=True)
                 except: continue
             
         except Exception as e:
