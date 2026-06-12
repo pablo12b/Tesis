@@ -453,7 +453,7 @@ def filtrar_y_guardar(textos, url_origen, fuente_id, institucion_objetivo="UPS",
         if not t:
             continue
 
-        if len(t) > 1 or forzar_guardado:
+        if len(t) > 0 or forzar_guardado:
             t_lower = t.lower()
             
             # Limpiar emojis ANTES de toda búsqueda
@@ -707,26 +707,38 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
         # Segundo: Extraer comentarios si existen
         comentarios_finales = []
         comentarios_visuales = []
+        
+        # Asegurarse de estar en la pestaña de "Comentarios" (a veces abre en "Podría interesarte")
         try:
-            page.wait_for_selector("[data-e2e='comment-level-1'], .comment-text", timeout=5000)
-            time.sleep(2)
-            
-            # Bucle para cargar la mayor cantidad de comentarios posibles
-            for _ in range(10):
-                page.evaluate("window.scrollBy(0, 800);")
-                time.sleep(1.5)
-                try:
-                    # Botones típicos de cargar más en TikTok
-                    btn = page.locator("text='Ver más respuestas', text='View more replies', text='Cargar más comentarios', text='Load more comments'").first
-                    if btn.is_visible(timeout=500):
-                        btn.click()
-                except: pass
-            
-            try:
-                comentarios_visuales = page.locator("[data-e2e='comment-level-1'], .SpanCommentContent, .comment-text").all_inner_texts()
-            except: pass
+            tab_comentarios = page.locator("[data-e2e='comment-icon'], [role='tab']:has-text('Comentarios'), [role='tab']:has-text('Comments')").first
+            if tab_comentarios.is_visible(timeout=2000):
+                tab_comentarios.click()
+                time.sleep(1)
+        except: pass
+        
+        # Scroll inicial para obligar a TikTok a cargar la sección de comentarios
+        page.evaluate("window.scrollBy(0, 500);")
+        time.sleep(2)
+        
+        try:
+            page.wait_for_selector("[data-e2e='comment-level-1'], .comment-text, div[class*='CommentContent']", timeout=4000)
         except: 
-            logger.debug(f"TikTok: No hay comentarios visuales o timeout cargándolos")
+            logger.debug("TikTok: Timeout esperando el primer comentario, intentando scrollear de todos modos.")
+            
+        # Bucle para cargar la mayor cantidad de comentarios posibles
+        for _ in range(8):
+            page.evaluate("window.scrollBy(0, 800);")
+            time.sleep(1.5)
+            try:
+                # Botones típicos de cargar más en TikTok
+                btn = page.locator("text='Ver más respuestas', text='View more replies', text='Cargar más comentarios', text='Load more comments'").first
+                if btn.is_visible(timeout=500):
+                    btn.click()
+            except: pass
+        
+        try:
+            comentarios_visuales = page.locator("[data-e2e='comment-level-1'], .SpanCommentContent, .comment-text, div[class*='DivCommentContentContainer'] p").all_inner_texts()
+        except: pass
             
         interceptados_textos = [c["texto"] for c in comentarios_interceptados]
         
@@ -949,7 +961,7 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
                         try:
                             coms = page.locator(selector).all_inner_texts()
                             if coms:
-                                coms_validos = [c.strip() for c in coms if len(c.strip()) > 1]
+                                coms_validos = [c.strip() for c in coms if len(c.strip()) > 0]
                                 if coms_validos:
                                     comentarios.extend(coms_validos)
                                     logger.debug(f"Instagram: {len(coms_validos)} comentarios extraídos")
