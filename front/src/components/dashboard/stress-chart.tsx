@@ -20,38 +20,49 @@ interface StressChartProps {
 }
 
 export function StressChart({ data }: StressChartProps) {
-  // Sort and keep only the top ones or handle 'Ninguno' specially
+  // Sort and keep only the top ones
   const sortedData = [...data].sort((a, b) => b.cantidad - a.cantidad)
+
+  // Use a reliable color palette specifically for dark mode
+  const COLORS = [
+    "#06b6d4", // Cyan
+    "#3b82f6", // Blue
+    "#a855f7", // Purple
+    "#ec4899", // Pink
+    "#f43f5e", // Rose/Red
+    "#f59e0b", // Amber
+    "#10b981", // Emerald
+  ];
 
   const chartConfig = {
     cantidad: {
-      label: "Casos",
+      label: "Porcentaje (%)",
     },
     ...sortedData.reduce((acc, curr, i) => {
       acc[curr.factor_estres] = {
         label: curr.factor_estres,
-        color: `var(--color-chart-${(i % 5) + 1})`,
+        color: COLORS[i % COLORS.length],
       }
       return acc
     }, {} as ChartConfig),
   } as ChartConfig
 
-  const chartData = sortedData.map((item) => ({
+  const chartData = sortedData.map((item, i) => ({
     name: item.factor_estres,
     value: item.cantidad,
-    fill: chartConfig[item.factor_estres]?.color,
+    fill: COLORS[i % COLORS.length],
   }))
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader className="items-center pb-0">
+    <Card className="flex flex-col h-full">
+      <CardHeader className="items-center pb-2">
         <CardTitle>Factores de Estrés</CardTitle>
         <CardDescription>Principales desencadenantes detectados</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 pb-0">
+      <CardContent className="flex-1 flex flex-col justify-center pb-6">
         <ChartContainer
           config={chartConfig}
-          className="mx-auto aspect-square max-h-[300px]"
+          className="mx-auto w-full max-h-[350px] aspect-square"
         >
           <PieChart>
             <ChartTooltip
@@ -62,8 +73,12 @@ export function StressChart({ data }: StressChartProps) {
               data={chartData}
               dataKey="value"
               nameKey="name"
-              innerRadius={60}
-              strokeWidth={5}
+              cx="50%"
+              cy="50%"
+              innerRadius={90}
+              outerRadius={130}
+              strokeWidth={3}
+              stroke="var(--background)"
             >
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -71,7 +86,7 @@ export function StressChart({ data }: StressChartProps) {
             </Pie>
             <ChartLegend
               content={<ChartLegendContent nameKey="name" />}
-              className="-translate-y-2 flex-wrap gap-2 [&>*]:basis-1/3 [&>*]:justify-center text-xs"
+              className="mt-4 flex-wrap gap-2 [&>*]:basis-1/3 [&>*]:justify-center text-sm"
             />
           </PieChart>
         </ChartContainer>

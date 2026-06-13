@@ -29,8 +29,7 @@ pool.on('error', (err) => {
 app.get('/api/universidades', async (req, res) => {
   try {
     const query = `
-      SELECT DISTINCT institucion FROM narrativas_crudas 
-      WHERE institucion IS NOT NULL AND institucion != ''
+      SELECT institucion FROM estadisticas_universidad 
       ORDER BY institucion
     `;
     const result = await pool.query(query);
@@ -45,55 +44,21 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
   const { institucion } = req.params;
   
   try {
-    // Narrativas por nivel de riesgo
-    const riesgoQuery = `
-      SELECT a.nivel_riesgo, COUNT(*)::int as cantidad
-      FROM analisis_semantico a
-      JOIN narrativas_procesadas np ON a.procesada_id = np.id
-      JOIN narrativas_crudas nc ON np.cruda_id = nc.id
-      WHERE nc.institucion = $1
-      GROUP BY a.nivel_riesgo
-      ORDER BY 
-        CASE a.nivel_riesgo
-          WHEN 'Crítico' THEN 1
-          WHEN 'Alto' THEN 2
-          WHEN 'Medio' THEN 3
-          WHEN 'Bajo' THEN 4
-          ELSE 5
-        END
+    // 1. Obtener Estadísticas Generales
+    const statsQuery = `
+      SELECT total_publicaciones, total_comentarios, total_likes, total_views 
+      FROM estadisticas_universidad 
+      WHERE institucion = $1
     `;
     
-    // Narrativas por emoción principal
-    const emocionQuery = `
-      SELECT a.emocion_principal, COUNT(*)::int as cantidad
-      FROM analisis_semantico a
-      JOIN narrativas_procesadas np ON a.procesada_id = np.id
-      JOIN narrativas_crudas nc ON np.cruda_id = nc.id
-      WHERE nc.institucion = $1
-      GROUP BY a.emocion_principal
-      ORDER BY cantidad DESC
+    // 2. Obtener Narrativa Global y Porcentajes de IA
+    const macroQuery = `
+      SELECT narrativa_general, porcentajes_emociones, factores_riesgo 
+      FROM narrativa_global_universidad 
+      WHERE institucion = $1
     `;
     
-    // Narrativas por factor de estrés (normalizado y consolidado)
-    const estresQuery = `
-      SELECT 
-        CASE 
-          WHEN LOWER(TRIM(a.factor_estres)) LIKE LOWER('%académico%') OR LOWER(TRIM(a.factor_estres)) = LOWER('academico') THEN 'Académico'
-          WHEN LOWER(TRIM(a.factor_estres)) = LOWER('economico') OR LOWER(TRIM(a.factor_estres)) = LOWER('económico') THEN 'Económico'
-          WHEN LOWER(TRIM(a.factor_estres)) LIKE LOWER('%familiar%') THEN 'Familiar'
-          WHEN LOWER(TRIM(a.factor_estres)) LIKE LOWER('%social%') THEN 'Social'
-          ELSE 'Desconocido'
-        END as factor_estres,
-        COUNT(*)::int as cantidad
-      FROM analisis_semantico a
-      JOIN narrativas_procesadas np ON a.procesada_id = np.id
-      JOIN narrativas_crudas nc ON np.cruda_id = nc.id
-      WHERE nc.institucion = $1
-      GROUP BY factor_estres
-      ORDER BY cantidad DESC
-    `;
-    
-    // Narrativas por fuente
+    // 3. Mantener conteo de fuentes desde crudas
     const fuenteQuery = `
       SELECT 
         CASE nc.fuente_id
@@ -108,36 +73,50 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
       ORDER BY cantidad DESC
     `;
     
-    const [riesgo, emociones, estres, fuentes] = await Promise.all([
-      pool.query(riesgoQuery, [institucion]),
-      pool.query(emocionQuery, [institucion]),
-      pool.query(estresQuery, [institucion]),
+    const [statsRes, macroRes, fuentesRes] = await Promise.all([
+      pool.query(statsQuery, [institucion]),
+      pool.query(macroQuery, [institucion]),
       pool.query(fuenteQuery, [institucion])
     ]);
     
-    // Total de narrativas
-    const totalQuery = `
-      SELECT COUNT(*) as total FROM narrativas_crudas WHERE institucion = $1
-    `;
-    const totalResult = await pool.query(totalQuery, [institucion]);
-    
-    // Formatear respuesta
+    // Si no hay datos, retornamos objeto vacío
+    if (statsRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Institución no encontrada' });
+    }
+
+    const stats = statsRes.rows[0];
+    // Manejar el caso donde no haya macro-análisis (todavía generándose)
+    const macro = macroRes.rows.length > 0 ? macroRes.rows[0] : {
+      narrativa_general: "Análisis en proceso...",
+      porcentajes_emociones: {},
+      factores_riesgo: {}
+    };
+
+    // Formatear porcentajes de emociones de objeto a array
+    const emocionesFormat = Object.keys(macro.porcentajes_emociones).map(key => ({
+      emocion_principal: key,
+      cantidad: macro.porcentajes_emociones[key]
+    })).sort((a, b) => b.cantidad - a.cantidad);
+
+    // Formatear factores de estrés de objeto a array
+    const estresFormat = Object.keys(macro.factores_riesgo).map(key => ({
+      factor_estres: key,
+      cantidad: macro.factores_riesgo[key]
+    })).sort((a, b) => b.cantidad - a.cantidad);
+
+    // Formatear respuesta final
     const respuesta = {
       institucion,
-      total: parseInt(totalResult.rows[0].total),
-      riesgo: riesgo.rows.map(r => ({
-        nivel_riesgo: r.nivel_riesgo,
-        cantidad: parseInt(r.cantidad)
-      })),
-      emociones: emociones.rows.map(e => ({
-        emocion_principal: e.emocion_principal,
-        cantidad: parseInt(e.cantidad)
-      })),
-      estres: estres.rows.map(es => ({
-        factor_estres: es.factor_estres,
-        cantidad: parseInt(es.cantidad)
-      })),
-      fuentes: fuentes.rows.map(f => ({
+      metricas: {
+        publicaciones: parseInt(stats.total_publicaciones) || 0,
+        comentarios: parseInt(stats.total_comentarios) || 0,
+        likes: parseInt(stats.total_likes) || 0,
+        views: parseInt(stats.total_views) || 0,
+      },
+      narrativa: macro.narrativa_general || "No disponible",
+      emociones: emocionesFormat,
+      estres: estresFormat,
+      fuentes: fuentesRes.rows.map(f => ({
         fuente: f.fuente,
         cantidad: parseInt(f.cantidad)
       }))

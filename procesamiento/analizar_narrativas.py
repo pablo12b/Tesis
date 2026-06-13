@@ -5,17 +5,15 @@ import logging
 from groq import Groq
 from dotenv import load_dotenv
 from datetime import datetime
+import time
 
 # ========== CONFIGURACIÓN ==========
-# Cargar .env desde raíz Tesis/
 load_dotenv()
 
-# Logging con UTF-8 para Windows (sin reconfigure)
 log_dir = os.path.join(os.path.dirname(__file__), 'logs')
 os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, f"sprint2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+log_file = os.path.join(log_dir, f"map_reduce_analisis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
-# Configurar logging de forma simple y compatible
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -26,165 +24,198 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configurar Groq
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ========== FUNCIONES ==========
 def obtener_conexion():
-    """Conexión centralizada a BD"""
     try:
-        conn = psycopg2.connect(
+        return psycopg2.connect(
             user=os.getenv('DB_USER'), 
             password=os.getenv('DB_PASSWORD'),
             host=os.getenv('DB_HOST'), 
             port=os.getenv('DB_PORT'), 
             database=os.getenv('DB_NAME')
         )
-        return conn
     except Exception as e:
         logger.error(f"Error conectando a BD: {str(e)}")
         return None
 
-def crear_tablas_sprint2():
-    """Crea tablas necesarias para Sprint 2"""
+def crear_tabla_global():
     conn = obtener_conexion()
-    if not conn:
-        return False
+    if not conn: return False
     
     try:
         cur = conn.cursor()
-        logger.info("Creando tablas de Sprint 2...")
-        
-        # Eliminar tabla anterior si existe
-        cur.execute("DROP TABLE IF EXISTS analisis_semantico CASCADE")
-        
-        # Tabla de análisis semántico corregida
         cur.execute("""
-            CREATE TABLE analisis_semantico (
+            CREATE TABLE IF NOT EXISTS narrativa_global_universidad (
                 id SERIAL PRIMARY KEY,
-                procesada_id INT NOT NULL UNIQUE,
-                usuario_anonimo VARCHAR(64),
-                nivel_riesgo VARCHAR(50),
-                emocion_principal VARCHAR(100),
-                factor_estres VARCHAR(100),
-                historia_inferida TEXT,
-                confianza_ia FLOAT DEFAULT 0.5,
-                timestamp_analisis TIMESTAMP DEFAULT NOW(),
-                FOREIGN KEY (procesada_id) REFERENCES narrativas_procesadas(id)
+                institucion VARCHAR(100) UNIQUE NOT NULL,
+                narrativa_general TEXT,
+                porcentajes_emociones JSONB,
+                factores_riesgo JSONB,
+                fecha_analisis TIMESTAMP DEFAULT NOW()
             );
         """)
-        
         conn.commit()
         cur.close()
         conn.close()
-        logger.info("Tablas creadas exitosamente con el esquema corregido")
         return True
     except Exception as e:
-        logger.error(f"Error creando tablas: {str(e)}")
+        logger.error(f"Error creando tabla: {str(e)}")
         return False
 
-def analizar_narrativa_con_groq(texto_original):
-    """Analiza texto con Groq + Llama 3 (GRATIS)"""
-    prompt_maestro = f"""
-    Eres un psicólogo y analista de datos experto en bienestar estudiantil universitario en Cuenca, Ecuador.
-    Analiza la siguiente narrativa de un estudiante anónimo. Ten en cuenta la jerga local (ej. 'supletorios', 'jalar', 'fregado').
+def generar_analisis_parcial(institucion, chunk_texto, chunk_index, total_chunks):
+    """Fase MAP: Analiza un fragmento del texto total"""
+    logger.info(f"    -> [MAP] Analizando Paquete {chunk_index}/{total_chunks} de {institucion}...")
+    prompt_map = f"""
+    Eres un psicólogo analizando un FRAGMENTO ({chunk_index}/{total_chunks}) de comentarios de estudiantes de {institucion}.
     
-    Narrativa: "{texto_original}"
+    TEXTO:
+    \"\"\"
+    {chunk_texto}
+    \"\"\"
     
-    Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura (sin texto adicional ni bloques de código markdown):
+    Devuelve ÚNICAMENTE un JSON válido:
     {{
-        "nivel_riesgo": "Bajo, Medio, Alto, o Critico",
-        "emocion_principal": "La emocion predominante (ej. Frustracion, Ansiedad)",
-        "factor_estres": "Academico, Economico, Familiar, Social o Desconocido",
-        "historia_inferida": "Una breve inferencia (max 3 lineas) de lo que podria estar viviendo el estudiante."
+        "resumen_parcial": "Resumen de 1 párrafo de los problemas o sentimientos en ESTE fragmento.",
+        "porcentajes_emociones": {{"Enojo": 0, "Tristeza": 0, "Alegría": 0, "Miedo": 0, "Ansiedad": 0, "Indiferencia": 0}},
+        "factores_riesgo": {{"Académico": 0, "Económico": 0, "Social": 0, "Infraestructura": 0, "Atención al Estudiante": 0}}
     }}
     """
+    
     try:
         respuesta = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt_maestro}],
-            temperature=0.3,
-            max_tokens=500,
+            messages=[{"role": "user", "content": prompt_map}],
+            temperature=0.2,
+            max_tokens=800,
             response_format={"type": "json_object"}
         )
-        
-        texto_json = respuesta.choices[0].message.content.strip()
-        resultado = json.loads(texto_json)
-        
-        logger.info(f"[OK] Análisis Groq/Llama3: {resultado.get('nivel_riesgo')} | {resultado.get('emocion_principal')}")
-        return resultado
+        return json.loads(respuesta.choices[0].message.content.strip())
     except Exception as e:
-        logger.error(f"[ERROR] Error con Groq/Llama3: {str(e)}")
+        logger.error(f"Error en MAP: {str(e)}")
         return None
 
-def ejecutar_sprint_2():
-    """Procesa narrativas procesadas con IA"""
+def generar_narrativa_definitiva(institucion, resumenes_combinados):
+    """Fase REDUCE: Genera la narrativa final uniendo los resúmenes parciales"""
+    logger.info(f"    -> [REDUCE] Generando Narrativa Definitiva para {institucion}...")
+    prompt_reduce = f"""
+    A continuación tienes los resúmenes parciales de TODO el texto de los estudiantes de {institucion}.
+    
+    RESÚMENES PARCIALES:
+    \"\"\"
+    {resumenes_combinados}
+    \"\"\"
+    
+    Tu tarea es redactar la NARRATIVA EMOCIONAL GENERAL DEFINITIVA (3 o 4 párrafos bien estructurados) que englobe todo lo mencionado arriba.
+    Devuelve ÚNICAMENTE un JSON válido:
+    {{
+        "narrativa_general": "La redacción final aquí."
+    }}
+    """
+    
+    try:
+        respuesta = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt_reduce}],
+            temperature=0.3,
+            max_tokens=1500,
+            response_format={"type": "json_object"}
+        )
+        return json.loads(respuesta.choices[0].message.content.strip()).get("narrativa_general", "")
+    except Exception as e:
+        logger.error(f"Error en REDUCE: {str(e)}")
+        return "No se pudo generar la narrativa definitiva."
+
+def promediar_diccionarios(lista_diccionarios):
+    if not lista_diccionarios: return {}
+    resultado = {}
+    claves = lista_diccionarios[0].keys()
+    for k in claves:
+        suma = sum(d.get(k, 0) for d in lista_diccionarios)
+        resultado[k] = round(suma / len(lista_diccionarios), 1)
+    return resultado
+
+def ejecutar_map_reduce():
     logger.info("="*60)
-    logger.info("[IA] INICIANDO SPRINT 2 - PROCESAMIENTO SEMANTICO")
+    logger.info("INICIANDO ANÁLISIS 100% COMPLETO (MAP-REDUCE)")
     logger.info("="*60)
     
-    # Crear tablas si no existen / Recrear esquema limpio
-    crear_tablas_sprint2()
-    
+    crear_tabla_global()
     conn = obtener_conexion()
-    if not conn:
-        logger.error("[ERROR] No se pudo conectar a BD")
-        return
-    
+    if not conn: return
     cur = conn.cursor()
     
     try:
-        #Trae datos limpios y el ID sin NULLs de narrativas_procesadas
         cur.execute("""
-            SELECT np.id, np.contenido_limpio, np.estudiante_id_anonimo, nc.confianza_relevancia
+            SELECT nc.institucion, STRING_AGG(np.contenido_limpio, ' | ') as texto_agrupado
             FROM narrativas_procesadas np
             JOIN narrativas_crudas nc ON np.cruda_id = nc.id
-            LEFT JOIN analisis_semantico ast ON np.id = ast.procesada_id
-            WHERE ast.procesada_id IS NULL
+            WHERE nc.institucion IS NOT NULL AND nc.institucion != ''
+            GROUP BY nc.institucion
         """)
+        instituciones = cur.fetchall()
         
-        pendientes = cur.fetchall()
-        
-        if not pendientes:
-            logger.info("[OK] No hay narrativas pendientes de análisis")
-            cur.close()
-            conn.close()
-            return
-        
-        logger.info(f"[INFO] Encontradas {len(pendientes)} narrativas pendientes")
-        
-        for procesada_id, texto, usuario, confianza in pendientes:
-            logger.info(f"[PROCESO] Procesando narrativa procesada ID {procesada_id}...")
-            logger.info(f"[TEXTO] {texto[:60]}...")
+        for institucion, texto_agrupado in instituciones:
+            logger.info(f"\n[UNIVERSIDAD] {institucion}")
             
-            resultado_ia = analizar_narrativa_con_groq(texto)
+            # Dividir en fragmentos de 9000 caracteres
+            TAMANO_CHUNK = 9000
+            chunks = [texto_agrupado[i:i+TAMANO_CHUNK] for i in range(0, len(texto_agrupado), TAMANO_CHUNK)]
+            total_chunks = len(chunks)
+            logger.info(f"Texto total: {len(texto_agrupado)} chars. Dividido en {total_chunks} paquetes.")
             
-            if resultado_ia:
-                # Guardar en BD apuntando a la tabla correcta
-                cur.execute("""
-                    INSERT INTO analisis_semantico 
-                    (procesada_id, usuario_anonimo, nivel_riesgo, emocion_principal, factor_estres, historia_inferida, confianza_ia)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    procesada_id, 
-                    usuario,
-                    resultado_ia.get('nivel_riesgo'),
-                    resultado_ia.get('emocion_principal'),
-                    resultado_ia.get('factor_estres'),
-                    resultado_ia.get('historia_inferida'),
-                    confianza
-                ))
-                conn.commit()
-                logger.info(f"[GUARDADO] Análisis guardado con éxito")
-            else:
-                logger.warning(f"[ADVERTENCIA] Falló análisis IA para narrativa {procesada_id}")
-        
+            resumenes_parciales = []
+            lista_emociones = []
+            lista_factores = []
+            
+            # FASE MAP
+            for i, chunk in enumerate(chunks):
+                resultado_map = generar_analisis_parcial(institucion, chunk, i+1, total_chunks)
+                if resultado_map:
+                    resumenes_parciales.append(resultado_map.get("resumen_parcial", ""))
+                    lista_emociones.append(resultado_map.get("porcentajes_emociones", {}))
+                    lista_factores.append(resultado_map.get("factores_riesgo", {}))
+                
+                # Respetar rate limits de Groq
+                logger.info("Esperando 62 segundos para evitar baneos de la API...")
+                time.sleep(62)
+            
+            # FASE REDUCE
+            texto_combinado = "\n".join(resumenes_parciales)
+            narrativa_final = generar_narrativa_definitiva(institucion, texto_combinado)
+            emociones_promedio = promediar_diccionarios(lista_emociones)
+            factores_promedio = promediar_diccionarios(lista_factores)
+            
+            # GUARDAR EN BD
+            cur.execute("""
+                INSERT INTO narrativa_global_universidad 
+                (institucion, narrativa_general, porcentajes_emociones, factores_riesgo, fecha_analisis)
+                VALUES (%s, %s, %s, %s, NOW())
+                ON CONFLICT (institucion) 
+                DO UPDATE SET 
+                    narrativa_general = EXCLUDED.narrativa_general,
+                    porcentajes_emociones = EXCLUDED.porcentajes_emociones,
+                    factores_riesgo = EXCLUDED.factores_riesgo,
+                    fecha_analisis = NOW()
+            """, (
+                institucion, 
+                narrativa_final,
+                json.dumps(emociones_promedio),
+                json.dumps(factores_promedio)
+            ))
+            conn.commit()
+            logger.info(f"[ÉXITO] Análisis Map-Reduce guardado para {institucion}")
+            
+            # Pausa final antes de pasar a la siguiente universidad
+            time.sleep(62)
+            
         cur.close()
         conn.close()
-        logger.info("[FINALIZADO] Sprint 2 completado exitosamente")
+        logger.info("\n[FINALIZADO] Análisis 100% de todas las universidades completado.")
         
     except Exception as e:
-        logger.error(f"[ERROR CRITICO] Error en Sprint 2: {str(e)}", exc_info=True)
+        logger.error(f"Error crítico: {str(e)}", exc_info=True)
 
 if __name__ == "__main__":
-    ejecutar_sprint_2()
+    ejecutar_map_reduce()

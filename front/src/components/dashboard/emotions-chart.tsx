@@ -20,7 +20,7 @@ interface EmotionsChartProps {
 export function EmotionsChart({ data }: EmotionsChartProps) {
   const chartConfig = {
     cantidad: {
-      label: "Ocurrencias",
+      label: "Porcentaje (%)",
       color: "var(--color-primary)",
     },
   } satisfies ChartConfig
@@ -31,8 +31,8 @@ export function EmotionsChart({ data }: EmotionsChartProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Emociones Principales</CardTitle>
-        <CardDescription>Top 7 emociones detectadas en los textos</CardDescription>
+        <CardTitle>Emociones Dominantes</CardTitle>
+        <CardDescription>Distribución porcentual del sentimiento colectivo</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="min-h-[300px] w-full">

@@ -1,14 +1,14 @@
 import { Sidebar } from "./sidebar"
 import { DashboardHeader } from "./header"
 import { StatCard } from "./stat-card"
-import { RiskChart } from "./risk-chart"
 import { EmotionsChart } from "./emotions-chart"
 import { StressChart } from "./stress-chart"
 import { SourcesChart } from "./sources-chart"
 import { ComparisonChart } from "./comparison-chart"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import type { Estadisticas } from "@/lib/types"
-import { Users, AlertTriangle, MessageSquare, Activity } from "lucide-react"
+import { Users, Heart, MessageSquare, Eye, FileText } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
 interface DashboardProps {
   universidades: string[]
@@ -26,8 +26,11 @@ export default function Dashboard({
   todasLasEstadisticas,
 }: DashboardProps) {
   const comparisonData = Object.values(todasLasEstadisticas)
-  const statsAltoRiesgo = estadisticas.riesgo.find(r => r.nivel_riesgo === 'Alto')?.cantidad || 0
-  const statsEmocionPrincipal = [...estadisticas.emociones].sort((a,b) => b.cantidad - a.cantidad)[0]?.emocion_principal || 'N/A'
+  
+  // Encontrar la emoción principal basada en los porcentajes
+  const statsEmocionPrincipal = estadisticas.emociones.length > 0 
+    ? [...estadisticas.emociones].sort((a,b) => b.cantidad - a.cantidad)[0]?.emocion_principal 
+    : 'N/A'
 
   return (
     <SidebarProvider>
@@ -39,41 +42,49 @@ export default function Dashboard({
             activeTab={activeTab}
             onTabChange={onTabChange}
           />
-          <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+          <div key={activeTab} className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-500 fill-mode-both">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <StatCard
-                title="Total Registros"
-                value={estadisticas.total.toLocaleString()}
-                subtitle={`Datos recolectados para ${activeTab}`}
-                icon={Users}
+                title="Publicaciones"
+                value={estadisticas.metricas.publicaciones.toLocaleString()}
+                subtitle={`Posts en ${activeTab}`}
+                icon={FileText}
               />
               <StatCard
-                title="Casos de Alto Riesgo"
-                value={statsAltoRiesgo.toLocaleString()}
-                subtitle="Requieren atención prioritaria"
-                icon={AlertTriangle}
-                className="[&_.text-primary]:text-destructive [&_.bg-primary\/10]:bg-destructive/10"
-              />
-              <StatCard
-                title="Emoción Dominante"
-                value={statsEmocionPrincipal}
-                subtitle="Sentimiento más recurrente"
+                title="Comentarios Totales"
+                value={estadisticas.metricas.comentarios.toLocaleString()}
+                subtitle="Interacciones escritas"
                 icon={MessageSquare}
               />
               <StatCard
-                title="Factores de Estrés"
-                value={estadisticas.estres.length}
-                subtitle="Categorías identificadas"
-                icon={Activity}
+                title="Vistas Totales"
+                value={estadisticas.metricas.views.toLocaleString()}
+                subtitle="Alcance global"
+                icon={Eye}
+              />
+              <StatCard
+                title="Me Gusta"
+                value={estadisticas.metricas.likes.toLocaleString()}
+                subtitle="Reacciones recibidas"
+                icon={Heart}
+                className="[&_.text-primary]:text-red-500 [&_.bg-primary\/10]:bg-red-500/10"
               />
             </div>
             
             <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-7">
               <div className="lg:col-span-4">
-                <EmotionsChart data={estadisticas.emociones} />
+                <Card className="h-full flex flex-col border-border/50 bg-card/50 backdrop-blur-sm">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Narrativa Emocional General</CardTitle>
+                    <CardDescription>Resumen macro-analítico generado por Inteligencia Artificial</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 text-sm md:text-base leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                    {estadisticas.narrativa}
+                  </CardContent>
+                </Card>
               </div>
               <div className="lg:col-span-3">
-                <RiskChart data={estadisticas.riesgo} />
+                <EmotionsChart data={estadisticas.emociones} />
               </div>
             </div>
 

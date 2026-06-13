@@ -31,9 +31,13 @@ export function DashboardHeader({ universidades, activeTab, onTabChange }: Heade
         {/* The requested university tabs */}
         <div className="flex-1 flex justify-center overflow-x-auto hide-scrollbar">
           <Tabs value={activeTab} onValueChange={onTabChange} className="w-fit">
-            <TabsList>
+            <TabsList className="gap-2 p-1.5 bg-muted/60 border border-border/50 rounded-xl">
               {universidades.map((u) => (
-                <TabsTrigger key={u} value={u}>
+                <TabsTrigger 
+                  key={u} 
+                  value={u} 
+                  className="px-6 py-2.5 text-base font-semibold transition-all rounded-lg hover:bg-primary/20 hover:text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                >
                   {u}
                 </TabsTrigger>
               ))}

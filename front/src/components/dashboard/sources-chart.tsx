@@ -31,10 +31,10 @@ export function SourcesChart({ data }: SourcesChartProps) {
         <CardTitle>Fuentes de Datos</CardTitle>
         <CardDescription>Distribución por red social o plataforma</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col justify-center pb-6">
         <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
           <BarChart accessibilityLayer data={data} margin={{ bottom: 20 }}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
             <XAxis
               dataKey="fuente"
               tickLine={false}
@@ -44,13 +44,13 @@ export function SourcesChart({ data }: SourcesChartProps) {
             <YAxis hide />
             <ChartTooltip
               cursor={{ fill: 'var(--color-muted)', opacity: 0.2 }}
-              content={<ChartTooltipContent indicator="dashed" />}
+              content={<ChartTooltipContent indicator="dashed" className="text-sm sm:text-base p-3 w-[180px]" />}
             />
             <Bar
               dataKey="cantidad"
-              fill="var(--color-secondary)"
-              radius={[4, 4, 0, 0]}
-              barSize={40}
+              fill="#6366f1"
+              radius={[6, 6, 0, 0]}
+              barSize={45}
             />
           </BarChart>
         </ChartContainer>
