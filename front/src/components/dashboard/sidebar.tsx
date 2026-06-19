@@ -9,7 +9,6 @@ import {
 
 const navigation = [
   { name: "Overview", icon: LayoutDashboard, current: true },
-  { name: "Análisis", icon: BarChart3, current: false },
 ]
 
 const secondaryNavigation = [
@@ -18,7 +17,12 @@ const secondaryNavigation = [
   { name: "Configuración", icon: Settings },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  activePage: string
+  onPageChange: (page: string) => void
+}
+
+export function Sidebar({ activePage, onPageChange }: SidebarProps) {
   return (
     <aside className="hidden md:flex h-screen w-64 flex-col border-r border-border bg-sidebar shrink-0 sticky top-0">
       <div className="flex h-16 items-center gap-2 border-b border-border px-4">
@@ -32,35 +36,54 @@ export function Sidebar() {
         <p className="mb-2 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Principal
         </p>
-        {navigation.map((item) => (
-          <a
-            key={item.name}
-            href="#"
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-              item.current
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}
-          >
-            <item.icon className="h-5 w-5" />
-            {item.name}
-          </a>
-        ))}
+        {navigation.map((item) => {
+          const isActuallyActive = activePage === item.name;
+          return (
+            <a
+              key={item.name}
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onPageChange(item.name);
+              }}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isActuallyActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.name}
+            </a>
+          )
+        })}
 
         <p className="mb-2 mt-6 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Datos
         </p>
-        {secondaryNavigation.map((item) => (
-          <a
-            key={item.name}
-            href="#"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <item.icon className="h-5 w-5" />
-            {item.name}
-          </a>
-        ))}
+        {secondaryNavigation.map((item) => {
+          const isActive = activePage === item.name;
+          return (
+            <a
+              key={item.name}
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onPageChange(item.name);
+              }}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.name}
+            </a>
+          )
+        })}
       </nav>
 
       <div className="border-t border-border p-4">

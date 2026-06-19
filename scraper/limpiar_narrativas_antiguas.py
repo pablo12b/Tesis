@@ -39,16 +39,14 @@ def obtener_conexion():
         return None
 
 
-def limpiar_narrativas_antiguas(semanas=4):
+import argparse
+
+def limpiar_narrativas_antiguas(semanas=4, institucion="TODAS"):
     """
     Elimina narrativas crudas cuya fecha_publicacion sea > semanas atrás
-    Cascada de eliminación:
-    - narrativas_crudas (id) → narrativas_procesadas (cruda_id)
-    - narrativas_procesadas (id) → analisis_semantico (procesada_id)
-    - narrativas_crudas (id) → deduplicacion_cache (buscando por hash)
     """
     logger.info("="*70)
-    logger.info(f"[LIMPIEZA] Iniciando eliminación de narrativas > {semanas} semanas")
+    logger.info(f"[LIMPIEZA] Iniciando eliminación de narrativas > {semanas} semanas para: {institucion}")
     logger.info("="*70)
     
     conn = obtener_conexion()
@@ -63,22 +61,29 @@ def limpiar_narrativas_antiguas(semanas=4):
         fecha_limite = datetime.now() - timedelta(weeks=semanas)
         logger.info(f"[FECHA LÍMITE] {fecha_limite.strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # 1. Buscar narrativas antiguas (ignorar fechas inválidas/desconocidas)
-        # Solo busca fechas que se puedan convertir a DATE
-        cur.execute("""
+        # 1. Buscar narrativas antiguas
+        query = """
             SELECT id, contenido_original, fecha_publicacion, institucion
             FROM narrativas_crudas
             WHERE fecha_publicacion != 'Desconocida' 
             AND fecha_publicacion IS NOT NULL
             AND fecha_publicacion != ''
             AND CAST(fecha_publicacion AS DATE) < %s
-            ORDER BY fecha_publicacion ASC
-        """, (fecha_limite.date(),))
+        """
+        params = [fecha_limite.date()]
+        
+        if institucion != "TODAS":
+            query += " AND institucion = %s"
+            params.append(institucion)
+            
+        query += " ORDER BY fecha_publicacion ASC"
+        
+        cur.execute(query, tuple(params))
         
         narrativas_antiguas = cur.fetchall()
         
         if not narrativas_antiguas:
-            logger.info("[OK] No hay narrativas antiguas para eliminar")
+            logger.info(f"[OK] No hay narrativas antiguas para eliminar ({institucion})")
             cur.close()
             conn.close()
             return
@@ -89,9 +94,8 @@ def limpiar_narrativas_antiguas(semanas=4):
         eliminadas = 0
         errores = 0
         
-        for cruda_id, contenido, fecha_pub, institucion in narrativas_antiguas:
+        for cruda_id, contenido, fecha_pub, inst in narrativas_antiguas:
             try:
-                # Primero eliminar de analisis_semantico (que depende de narrativas_procesadas)
                 cur.execute("""
                     DELETE FROM analisis_semantico
                     WHERE procesada_id IN (
@@ -100,18 +104,16 @@ def limpiar_narrativas_antiguas(semanas=4):
                 """, (cruda_id,))
                 analisis_eliminados = cur.rowcount
                 
-                # Luego eliminar de narrativas_procesadas
                 cur.execute("DELETE FROM narrativas_procesadas WHERE cruda_id = %s", (cruda_id,))
                 procesadas_eliminadas = cur.rowcount
                 
-                # Finalmente eliminar de narrativas_crudas
                 cur.execute("DELETE FROM narrativas_crudas WHERE id = %s", (cruda_id,))
                 crudas_eliminadas = cur.rowcount
                 
                 conn.commit()
                 eliminadas += 1
                 
-                logger.info(f"[ELIMINADA] ID {cruda_id} ({institucion}) - "
+                logger.info(f"[ELIMINADA] ID {cruda_id} ({inst}) - "
                            f"Fecha: {fecha_pub} - "
                            f"Análisis: {analisis_eliminados}, Procesadas: {procesadas_eliminadas}")
                 
@@ -135,7 +137,10 @@ def limpiar_narrativas_antiguas(semanas=4):
         conn.rollback()
         conn.close()
 
-
 if __name__ == "__main__":
-    limpiar_narrativas_antiguas(semanas=4)
+    parser = argparse.ArgumentParser(description="Limpieza de narrativas antiguas")
+    parser.add_argument("--institucion", type=str, default="TODAS", help="Institución a limpiar (UPS, UDA, UCUENCA, UCACUE) o TODAS")
+    args = parser.parse_args()
+    
+    limpiar_narrativas_antiguas(semanas=4, institucion=args.institucion)
     logger.info("\n[FINALIZADO] Limpieza completada\n")

@@ -67,7 +67,7 @@ export function StressChart({ data }: StressChartProps) {
           <PieChart>
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent hideLabel />}
+              content={<ChartTooltipContent hideLabel className="text-sm p-3 min-w-[10rem] [&_.text-muted-foreground]:text-sm [&_.font-mono]:text-base" />}
             />
             <Pie
               data={chartData}

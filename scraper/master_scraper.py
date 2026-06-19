@@ -18,6 +18,7 @@ import logging
 import hashlib
 import time
 import json
+import argparse
 from dotenv import load_dotenv
 
 # ==========================================
@@ -49,6 +50,7 @@ INSTITUCIONES = {
         "nombre_completo": "Universidad Politécnica Salesiana",
         "abreviatura": "ups",
         "tiktok_user": "upsalesianaec",
+        "facebook_url": "https://www.facebook.com/UPSalesianaEc",
         "palabras_clave": ["ups", "upscuenca", "politecnica salesiana", "politécnica salesiana", "salesiana"],
         "hashtags": ["upscuenca"],
         "busqueda_nombre": "UPS Cuenca"
@@ -57,6 +59,7 @@ INSTITUCIONES = {
         "nombre_completo": "Universidad Católica de Cuenca",
         "abreviatura": "ucacue",
         "tiktok_user": "ucatocuenca",
+        "facebook_url": "https://www.facebook.com/groups/ucacue.ec",
         "palabras_clave": ["ucacue", "universidad católica", "universidad catolica", "católica cuenca", "catolica cuenca"],
         "hashtags": ["catocorazon", "caucue", "ucacue"],
         "busqueda_nombre": "Católica Cuenca"
@@ -65,6 +68,7 @@ INSTITUCIONES = {
         "nombre_completo": "Universidad del Azuay",
         "abreviatura": "uazuay",
         "tiktok_user": "uazuay",
+        "facebook_url": "https://www.facebook.com/uazuay",
         "palabras_clave": ["uda", "universidad del azuay", "azuay"],
         "hashtags": ["universidaddelazuay", "unazuay"],
         "busqueda_nombre": "Universidad del Azuay"
@@ -73,6 +77,7 @@ INSTITUCIONES = {
         "nombre_completo": "Universidad de Cuenca",
         "abreviatura": "ucuenca",
         "tiktok_user": "ucuenca",
+        "facebook_url": "https://www.facebook.com/ucuenca",
         "palabras_clave": ["universidad de cuenca", "u de cuenca", "ucuenca", "udecu"],
         "hashtags": ["universidaddecuenca", "ucuenca", "udecu"],
         "busqueda_nombre": "Universidad de Cuenca"
@@ -776,7 +781,7 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
             logger.debug(f"TikTok: Video sin texto extraíble")
 
         # Guardar comentarios
-        if publicacion_guardada and comentarios_finales:
+        if comentarios_finales:
             total_tiktok += filtrar_y_guardar(
                 comentarios_finales,
                 video_url,
@@ -788,10 +793,8 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
                 tipo_texto='comentario',
                 forzar_guardado=True
             )
-        elif not publicacion_guardada:
-            logger.debug(f"TikTok: No se guardan comentarios porque la publicación no fue guardada")
         else:
-            logger.debug(f"TikTok: Video sin comentarios")
+            logger.debug(f"TikTok: Video sin comentarios para guardar")
     
     browser.close()
     logger.info(f"TIKTOK {institucion} FINALIZADO: {total_tiktok} narrativas.")
@@ -998,10 +1001,8 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
                     logger.debug(f"Instagram: Post sin texto extraíble")
 
                 # Guardar comentarios
-                if publicacion_guardada and comentarios_finales:
+                if comentarios_finales:
                     total_ig += filtrar_y_guardar(comentarios_finales, url_actual, fuente_id=2, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario", forzar_guardado=True)
-                elif not publicacion_guardada:
-                    logger.debug(f"Instagram: No se guardan comentarios porque la publicación no fue guardada")
 
             try:
                 page.keyboard.press("ArrowRight")
@@ -1072,12 +1073,20 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
         "compras", "precio", "vendemos", "venta", "ventas", "fabricamos"
     ]
     
-    for keyword in PALABRAS_CLAVE_AMPLIACION:
-        # Construir query con nombre de universidad
-        query = f"{inst_data['nombre_completo']} {keyword}".strip()
-        url_fb = f"https://www.facebook.com/search/posts/?q={query.replace(' ', '%20')}"
+    urls_a_visitar = []
+    
+    # 1. Añadir el perfil
+    if 'facebook_url' in inst_data and inst_data['facebook_url']:
+        urls_a_visitar.append((f"Perfil Oficial: {inst_data['facebook_url']}", inst_data['facebook_url']))
         
-        print(f"\n   Buscando '{query}' en Facebook...")
+    # 2. Añadir las búsquedas por palabras clave
+    for keyword in PALABRAS_CLAVE_AMPLIACION:
+        query = f"{inst_data['nombre_completo']} {keyword}".strip()
+        url_search = f"https://www.facebook.com/search/posts/?q={query.replace(' ', '%20')}"
+        urls_a_visitar.append((f"Búsqueda: '{query}'", url_search))
+    
+    for descripcion, url_fb in urls_a_visitar:
+        print(f"\n   Visitando {descripcion} en Facebook...")
         try:
             page.goto(url_fb, timeout=60000)
         except: pass
@@ -1091,7 +1100,10 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
         
         print(f"   Haciendo scroll en los resultados de búsqueda para '{query}'...")
         for _ in range(8):
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+            try:
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+            except Exception as e:
+                logger.debug(f"Error haciendo scroll (posible navegación/recarga): {e}")
             time.sleep(4)
             
         try:
@@ -1243,7 +1255,7 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
                             publicacion_guardada = True
                             total_fb += guardados_pub
                             
-                        if publicacion_guardada and comentarios_finales:
+                        if comentarios_finales:
                             total_fb += filtrar_y_guardar(comentarios_finales, post_url, fuente_id=3, fecha=fecha_publicacion, institucion_objetivo=institucion, likes=0, views=0, tipo_texto="comentario", forzar_guardado=True)
                 except: continue
             
@@ -1263,16 +1275,27 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
 # ==========================================
 
 def main():
-    """Ejecuta scraping para TODAS las universidades"""
+    parser = argparse.ArgumentParser(description="Master Scraper para Tesis")
+    parser.add_argument("--institucion", type=str, default="TODAS", help="Institución a scrapear (UPS, UDA, UCUENCA, UCACUE) o TODAS")
+    args = parser.parse_args()
+
+    instituciones_a_procesar = ["UPS", "UCACUE", "UDA", "UCUENCA"]
+    if args.institucion != "TODAS":
+        if args.institucion in instituciones_a_procesar:
+            instituciones_a_procesar = [args.institucion]
+        else:
+            print(f"Error: Institución {args.institucion} no válida.")
+            return
+
     logger.info("\n" + "="*70)
-    logger.info("INICIANDO MASTER SCRAPER")
+    logger.info(f"INICIANDO MASTER SCRAPER ({args.institucion})")
     logger.info("="*70)
     
     resumen = {}
     
     with sync_playwright() as p:
-        # Ejecutar para cada universidad
-        for institucion in ["UPS", "UCACUE", "UDA", "UCUENCA"]:
+        # Ejecutar para cada universidad seleccionada
+        for institucion in instituciones_a_procesar:
             logger.info(f"\n\n{'#'*70}")
             logger.info(f"# PROCESANDO: {institucion}")
             logger.info(f"{'#'*70}")

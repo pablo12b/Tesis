@@ -24,6 +24,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<string>('')
+  const [activePage, setActivePage] = useState<string>('Overview')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -112,6 +113,8 @@ function App() {
           onTabChange={setActiveTab}
           estadisticas={stats[activeTab]}
           todasLasEstadisticas={stats}
+          activePage={activePage}
+          onPageChange={setActivePage}
         />
       )}
     </div>

@@ -41,7 +41,9 @@ def limpiar_texto(texto):
     
     return texto.strip()
 
-def procesar_narrativas():
+import argparse
+
+def procesar_narrativas(institucion_arg="TODAS"):
     conn = obtener_conexion()
     if not conn: return
     
@@ -56,13 +58,23 @@ def procesar_narrativas():
 
     print("Buscando nuevas narrativas para procesar...")
     # Ahora también traemos tipo_texto y url_publicacion para la herencia de contexto
-    query = """
-        SELECT nc.id, nc.contenido_original, nc.institucion, nc.tipo_texto, nc.url_publicacion
-        FROM narrativas_crudas nc
-        LEFT JOIN narrativas_procesadas np ON nc.id = np.cruda_id
-        WHERE np.cruda_id IS NULL;
-    """
-    cur.execute(query)
+    
+    if institucion_arg != "TODAS":
+        query = """
+            SELECT nc.id, nc.contenido_original, nc.institucion, nc.tipo_texto, nc.url_publicacion
+            FROM narrativas_crudas nc
+            LEFT JOIN narrativas_procesadas np ON nc.id = np.cruda_id
+            WHERE np.cruda_id IS NULL AND nc.institucion = %s;
+        """
+        cur.execute(query, (institucion_arg,))
+    else:
+        query = """
+            SELECT nc.id, nc.contenido_original, nc.institucion, nc.tipo_texto, nc.url_publicacion
+            FROM narrativas_crudas nc
+            LEFT JOIN narrativas_procesadas np ON nc.id = np.cruda_id
+            WHERE np.cruda_id IS NULL;
+        """
+        cur.execute(query)
     registros_pendientes = cur.fetchall()
     
     if not registros_pendientes:
@@ -127,4 +139,7 @@ def procesar_narrativas():
     print("Los datos están listos para el Sprint 2 (Análisis Semántico con IA).")
 
 if __name__ == "__main__":
-    procesar_narrativas()
+    parser = argparse.ArgumentParser(description="Procesar narrativas")
+    parser.add_argument("--institucion", type=str, default="TODAS", help="Institución a procesar")
+    args = parser.parse_args()
+    procesar_narrativas(args.institucion)

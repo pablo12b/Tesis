@@ -136,9 +136,11 @@ def promediar_diccionarios(lista_diccionarios):
         resultado[k] = round(suma / len(lista_diccionarios), 1)
     return resultado
 
-def ejecutar_map_reduce():
+import argparse
+
+def ejecutar_map_reduce(institucion_arg="TODAS"):
     logger.info("="*60)
-    logger.info("INICIANDO ANÁLISIS 100% COMPLETO (MAP-REDUCE)")
+    logger.info(f"INICIANDO ANÁLISIS COMPLETO (MAP-REDUCE) - {institucion_arg}")
     logger.info("="*60)
     
     crear_tabla_global()
@@ -147,13 +149,22 @@ def ejecutar_map_reduce():
     cur = conn.cursor()
     
     try:
-        cur.execute("""
-            SELECT nc.institucion, STRING_AGG(np.contenido_limpio, ' | ') as texto_agrupado
-            FROM narrativas_procesadas np
-            JOIN narrativas_crudas nc ON np.cruda_id = nc.id
-            WHERE nc.institucion IS NOT NULL AND nc.institucion != ''
-            GROUP BY nc.institucion
-        """)
+        if institucion_arg != "TODAS":
+            cur.execute("""
+                SELECT nc.institucion, STRING_AGG(np.contenido_limpio, ' | ') as texto_agrupado
+                FROM narrativas_procesadas np
+                JOIN narrativas_crudas nc ON np.cruda_id = nc.id
+                WHERE nc.institucion = %s AND nc.institucion IS NOT NULL AND nc.institucion != ''
+                GROUP BY nc.institucion
+            """, (institucion_arg,))
+        else:
+            cur.execute("""
+                SELECT nc.institucion, STRING_AGG(np.contenido_limpio, ' | ') as texto_agrupado
+                FROM narrativas_procesadas np
+                JOIN narrativas_crudas nc ON np.cruda_id = nc.id
+                WHERE nc.institucion IS NOT NULL AND nc.institucion != ''
+                GROUP BY nc.institucion
+            """)
         instituciones = cur.fetchall()
         
         for institucion, texto_agrupado in instituciones:
@@ -218,4 +229,7 @@ def ejecutar_map_reduce():
         logger.error(f"Error crítico: {str(e)}", exc_info=True)
 
 if __name__ == "__main__":
-    ejecutar_map_reduce()
+    parser = argparse.ArgumentParser(description="Analizar narrativas")
+    parser.add_argument("--institucion", type=str, default="TODAS", help="Institución a procesar")
+    args = parser.parse_args()
+    ejecutar_map_reduce(args.institucion)

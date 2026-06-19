@@ -18,7 +18,9 @@ def obtener_conexion():
         print(f"Error de conexión: {e}")
         return None
 
-def actualizar_estadisticas():
+import argparse
+
+def actualizar_estadisticas(institucion_arg="TODAS"):
     conn = obtener_conexion()
     if not conn: return
     
@@ -52,19 +54,32 @@ def actualizar_estadisticas():
     
     # Esta consulta suma likes y views, y cuenta cuántas publicaciones y comentarios hay por institución
     # Usamos COALESCE para manejar casos donde las columnas likes/views puedan ser NULL
-    calculo_query = """
-        SELECT 
-            institucion,
-            COUNT(*) FILTER (WHERE tipo_texto = 'publicacion') as total_publicaciones,
-            COUNT(*) FILTER (WHERE tipo_texto = 'comentario') as total_comentarios,
-            SUM(COALESCE(likes, 0)) as total_likes,
-            SUM(COALESCE(views, 0)) as total_views
-        FROM narrativas_crudas
-        WHERE institucion IS NOT NULL AND institucion != ''
-        GROUP BY institucion;
-    """
-    
-    cur.execute(calculo_query)
+    if institucion_arg != "TODAS":
+        calculo_query = """
+            SELECT 
+                institucion,
+                COUNT(*) FILTER (WHERE tipo_texto = 'publicacion') as total_publicaciones,
+                COUNT(*) FILTER (WHERE tipo_texto = 'comentario') as total_comentarios,
+                SUM(COALESCE(likes, 0)) as total_likes,
+                SUM(COALESCE(views, 0)) as total_views
+            FROM narrativas_crudas
+            WHERE institucion = %s AND institucion IS NOT NULL AND institucion != ''
+            GROUP BY institucion;
+        """
+        cur.execute(calculo_query, (institucion_arg,))
+    else:
+        calculo_query = """
+            SELECT 
+                institucion,
+                COUNT(*) FILTER (WHERE tipo_texto = 'publicacion') as total_publicaciones,
+                COUNT(*) FILTER (WHERE tipo_texto = 'comentario') as total_comentarios,
+                SUM(COALESCE(likes, 0)) as total_likes,
+                SUM(COALESCE(views, 0)) as total_views
+            FROM narrativas_crudas
+            WHERE institucion IS NOT NULL AND institucion != ''
+            GROUP BY institucion;
+        """
+        cur.execute(calculo_query)
     resultados = cur.fetchall()
     
     if not resultados:
@@ -114,4 +129,7 @@ def actualizar_estadisticas():
     print(f"\n¡Éxito! Se han actualizado las estadísticas de {exito} universidades.")
 
 if __name__ == "__main__":
-    actualizar_estadisticas()
+    parser = argparse.ArgumentParser(description="Actualizar estadísticas")
+    parser.add_argument("--institucion", type=str, default="TODAS", help="Institución a procesar")
+    args = parser.parse_args()
+    actualizar_estadisticas(args.institucion)

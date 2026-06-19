@@ -134,6 +134,85 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Endpoint para ejecutar el pipeline de scraping
+app.post('/api/scraper/run', async (req, res) => {
+  const { institucion } = req.body;
+  
+  if (!institucion) {
+    return res.status(400).json({ error: 'Falta la institución' });
+  }
+  
+  console.log(`\n🚀 INICIANDO PIPELINE DE SCRAPING PARA: ${institucion} 🚀`);
+  
+  // Establecer encabezados para respuesta tipo Server-Sent Events (SSE) si quisiéramos streaming, 
+  // pero para no complicar el MVP vamos a esperar a que termine (lo cual podría dar timeout en HTTP).
+  // Como dura mucho, el enfoque más estable en HTTP corto plazo es responder OK y procesar en background
+  // PERO como el usuario pidió estado "Cargando", responderemos cuando termine. Advertencia de timeout.
+  
+  try {
+    const runPythonScript = (scriptPath, args) => {
+      return new Promise((resolve, reject) => {
+        // Ruta al ejecutable de Python en el entorno virtual
+        const pythonExe = process.platform === 'win32' 
+          ? path.join(__dirname, '..', 'venv', 'Scripts', 'python.exe')
+          : path.join(__dirname, '..', 'venv', 'bin', 'python');
+
+        console.log(`Ejecutando: ${pythonExe} ${scriptPath} ${args.join(' ')}`);
+        
+        const pyProcess = spawn(pythonExe, [scriptPath, ...args]);
+        
+        pyProcess.stdout.on('data', (data) => {
+          console.log(`[${path.basename(scriptPath)}] ${data.toString().trim()}`);
+        });
+        
+        pyProcess.stderr.on('data', (data) => {
+          console.error(`[${path.basename(scriptPath)} ERROR] ${data.toString().trim()}`);
+        });
+        
+        pyProcess.on('close', (code) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`El script terminó con código ${code}`));
+          }
+        });
+      });
+    };
+
+    const scraperDir = path.join(__dirname, '..', 'scraper');
+    const procDir = path.join(__dirname, '..', 'procesamiento');
+
+    // 0. Limpieza previa de datos antiguos (> 4 semanas)
+    await runPythonScript(path.join(scraperDir, 'limpiar_narrativas_antiguas.py'), ['--institucion', institucion]);
+
+    // 1. Scraping
+    await runPythonScript(path.join(scraperDir, 'master_scraper.py'), ['--institucion', institucion]);
+    
+    // 2. Procesar (Limpieza y herencia)
+    await runPythonScript(path.join(scraperDir, 'procesar_narrativas.py'), ['--institucion', institucion]);
+    
+    // 3. Análisis Semántico (Groq/Llama)
+    await runPythonScript(path.join(procDir, 'analizar_narrativas.py'), ['--institucion', institucion]);
+    
+    // 4. Actualizar Estadísticas
+    await runPythonScript(path.join(scraperDir, 'actualizar_estadisticas.py'), ['--institucion', institucion]);
+    
+    console.log(`\n✅ PIPELINE COMPLETADO PARA: ${institucion}`);
+    res.json({ success: true, message: `Pipeline completado exitosamente para ${institucion}` });
+    
+  } catch (error) {
+    console.error('Error en el pipeline:', error);
+    res.status(500).json({ error: error.message || 'Error ejecutando el pipeline' });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);

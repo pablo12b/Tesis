@@ -1,6 +1,7 @@
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Download, RefreshCw } from "lucide-react"
+import { Download, RefreshCw, Loader2 } from "lucide-react"
 
 interface HeaderProps {
   universidades: string[]
@@ -9,6 +10,27 @@ interface HeaderProps {
 }
 
 export function DashboardHeader({ universidades, activeTab, onTabChange }: HeaderProps) {
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  const handleGlobalUpdate = async () => {
+    setIsUpdating(true)
+    try {
+      const response = await fetch('http://localhost:5000/api/scraper/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ institucion: 'TODAS' }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error)
+      alert('¡Actualización de todas las universidades completada!')
+      window.location.reload()
+    } catch (error: any) {
+      alert('Hubo un error al actualizar: ' + error.message)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
       <div className="flex h-16 items-center justify-between px-6 flex-wrap gap-4">
@@ -46,9 +68,15 @@ export function DashboardHeader({ universidades, activeTab, onTabChange }: Heade
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="gap-2 hidden sm:flex" onClick={() => window.location.reload()}>
-            <RefreshCw className="h-4 w-4" />
-            Actualizar
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2 hidden sm:flex" 
+            onClick={handleGlobalUpdate}
+            disabled={isUpdating}
+          >
+            {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {isUpdating ? "Actualizando Todas..." : "Actualizar Todas"}
           </Button>
 
           <Button variant="default" size="sm" className="gap-2">

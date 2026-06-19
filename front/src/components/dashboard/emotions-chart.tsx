@@ -49,7 +49,7 @@ export function EmotionsChart({ data }: EmotionsChartProps) {
             />
             <ChartTooltip
               cursor={{ fill: 'var(--color-muted)', opacity: 0.2 }}
-              content={<ChartTooltipContent indicator="line" />}
+              content={<ChartTooltipContent indicator="line" className="text-sm p-3 min-w-[10rem] [&_.text-muted-foreground]:text-sm [&_.font-mono]:text-base" />}
             />
             <Bar
               dataKey="cantidad"
