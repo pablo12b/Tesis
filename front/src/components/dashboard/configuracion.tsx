@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Play, Loader2, ServerCog, AlertCircle, CheckCircle2 } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
 export function ConfiguracionPanel() {
@@ -71,9 +71,9 @@ export function ConfiguracionPanel() {
             {["UPS", "UDA", "UCUENCA", "UCACUE"].map((inst) => (
               <div key={inst} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-background/50">
                 <span className="font-medium">{inst}</span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => runScraper(inst)}
                   disabled={isScraping}
                   className="w-32"
@@ -96,8 +96,8 @@ export function ConfiguracionPanel() {
             <CardDescription>Ejecuta el pipeline completo para todas las universidades. ¡Advertencia! Este proceso puede tardar bastante.</CardDescription>
           </CardHeader>
           <CardContent className="relative z-10 flex flex-col items-center justify-center py-8">
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               onClick={() => runScraper('TODAS')}
               disabled={isScraping}
               className="w-full max-w-xs text-lg h-14 shadow-lg shadow-primary/25"
@@ -108,10 +108,10 @@ export function ConfiguracionPanel() {
                 <><Play className="mr-2 h-5 w-5 fill-current" /> Sincronizar Todas</>
               )}
             </Button>
-            
+
             {isScraping && (
               <p className="mt-6 text-sm text-muted-foreground animate-pulse flex items-center justify-center text-center">
-                El scraper y la IA están trabajando en segundo plano.<br/>Por favor, no recargues la página.
+                El scraper y la IA están trabajando en segundo plano.<br />Por favor, no recargues la página.
               </p>
             )}
           </CardContent>

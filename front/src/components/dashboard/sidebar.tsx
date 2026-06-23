@@ -1,7 +1,6 @@
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
-  BarChart3,
   Settings,
   GraduationCap,
   Database,

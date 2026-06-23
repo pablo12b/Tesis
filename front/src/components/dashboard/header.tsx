@@ -55,9 +55,9 @@ export function DashboardHeader({ universidades, activeTab, onTabChange }: Heade
           <Tabs value={activeTab} onValueChange={onTabChange} className="w-fit">
             <TabsList className="gap-2 p-1.5 bg-muted/60 border border-border/50 rounded-xl">
               {universidades.map((u) => (
-                <TabsTrigger 
-                  key={u} 
-                  value={u} 
+                <TabsTrigger
+                  key={u}
+                  value={u}
                   className="px-6 py-2.5 text-base font-semibold transition-all rounded-lg hover:bg-primary/20 hover:text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
                 >
                   {u}
@@ -68,10 +68,10 @@ export function DashboardHeader({ universidades, activeTab, onTabChange }: Heade
         </div>
 
         <div className="flex items-center gap-3">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="gap-2 hidden sm:flex" 
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 hidden sm:flex"
             onClick={handleGlobalUpdate}
             disabled={isUpdating}
           >

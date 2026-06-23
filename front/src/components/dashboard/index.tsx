@@ -5,10 +5,11 @@ import { EmotionsChart } from "./emotions-chart"
 import { StressChart } from "./stress-chart"
 import { SourcesChart } from "./sources-chart"
 import { ComparisonChart } from "./comparison-chart"
+import { HistoricoChart } from "./historico-chart"
 import { ConfiguracionPanel } from "./configuracion"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import type { Estadisticas } from "@/lib/types"
-import { Users, Heart, MessageSquare, Eye, FileText } from "lucide-react"
+import { Heart, MessageSquare, Eye, FileText } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
 interface DashboardProps {
@@ -32,11 +33,6 @@ export default function Dashboard({
 }: DashboardProps) {
   const comparisonData = Object.values(todasLasEstadisticas)
   
-  // Encontrar la emoción principal basada en los porcentajes
-  const statsEmocionPrincipal = estadisticas.emociones.length > 0 
-    ? [...estadisticas.emociones].sort((a,b) => b.cantidad - a.cantidad)[0]?.emocion_principal 
-    : 'N/A'
-
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background font-sans antialiased text-foreground">
@@ -102,6 +98,10 @@ export default function Dashboard({
                   <div className="lg:col-span-4">
                     <SourcesChart data={estadisticas.fuentes} />
                   </div>
+                </div>
+
+                <div className="mt-4">
+                  <HistoricoChart data={estadisticas.historico} />
                 </div>
 
                 <div className="mt-4">

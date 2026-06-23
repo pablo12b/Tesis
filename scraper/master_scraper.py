@@ -201,11 +201,12 @@ def obtener_palabras_clave_excluir(institucion_objetivo):
             palabras_excluir.extend(inst_data['palabras_clave'])
     return palabras_excluir
 
-def es_duplicado(contenido):
-    """Verifica si el contenido ya fue procesado (por hash o contenido similar)"""
+def es_duplicado(contenido, url=""):
+    """Verifica si el contenido ya fue procesado (por hash de URL + contenido)"""
     try:
-        # Primero: verificar por hash exacto (rápido)
-        hash_contenido = hashlib.md5(contenido.encode()).hexdigest()
+        # Hacemos el hash combinando la URL y el contenido para no borrar comentarios idénticos en posts distintos
+        texto_a_hashear = f"{url}_{contenido}"
+        hash_contenido = hashlib.md5(texto_a_hashear.encode()).hexdigest()
         conn = obtener_conexion_db()
         if not conn:
             return False
@@ -360,8 +361,8 @@ def es_fecha_reciente(fecha_str, dias=28):
 def guardar_en_db(contenido, fuente_id, url, fecha, institucion="OTRO", likes=0, views=0, tipo_texto="publicacion", reacciones=None):
     """Guarda contenido en BD con validaciones de duplicado e institución"""
     try:
-        # Verificar duplicado ANTES de guardar
-        if es_duplicado(contenido):
+        # Verificar duplicado ANTES de guardar (usando el contenido y la url)
+        if es_duplicado(contenido, url):
             logger.debug(f"Contenido duplicado, omitiendo: {contenido[:50]}...")
             return False
         
@@ -541,8 +542,9 @@ def ejecutar_tiktok_universidad(p, institucion="UPS"):
     logger.info(f"\n{'='*60}")
     logger.info(f"INICIANDO TIKTOK PARA: {inst_data['nombre_completo']}")
     logger.info(f"{'='*60}")
-    # Usar contexto persistente para reutilizar sesiones guardadas y evitar bloqueos de TikTok
-    ruta_perfil = os.path.abspath("./playwright_profile")
+    # Usar ruta absoluta basada en el directorio del script
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ruta_perfil = os.path.join(base_dir, "playwright_profile")
     browser = p.chromium.launch_persistent_context(
         user_data_dir=ruta_perfil,
         headless=False,
@@ -809,8 +811,9 @@ def ejecutar_instagram_universidad(p, institucion="UPS"):
     logger.info(f"INICIANDO INSTAGRAM PARA: {inst_data['nombre_completo']}")
     logger.info(f"{'='*60}")
     
-    # Usar contexto persistente para reutilizar sesiones guardadas
-    ruta_perfil = os.path.abspath("./playwright_profile")
+    # Usar ruta absoluta basada en el directorio del script
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ruta_perfil = os.path.join(base_dir, "playwright_profile")
     browser = p.chromium.launch_persistent_context(
         user_data_dir=ruta_perfil,
         headless=False,
@@ -1022,8 +1025,9 @@ def ejecutar_facebook_universidad(p, institucion="UPS"):
     logger.info(f"INICIANDO FACEBOOK PARA: {inst_data['nombre_completo']}")
     logger.info(f"{'='*60}")
     
-    # Usar contexto persistente para reutilizar sesiones guardadas
-    ruta_perfil = os.path.abspath("./playwright_profile")
+    # Usar ruta absoluta basada en el directorio del script
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ruta_perfil = os.path.join(base_dir, "playwright_profile")
     browser = p.chromium.launch_persistent_context(
         user_data_dir=ruta_perfil,
         headless=False,

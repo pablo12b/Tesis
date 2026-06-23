@@ -37,13 +37,24 @@ def actualizar_estadisticas(institucion_arg="TODAS"):
             total_views INTEGER DEFAULT 0,
             ultima_actualizacion TIMESTAMP DEFAULT NOW()
         );
+        
+        CREATE TABLE IF NOT EXISTS estadisticas_historico (
+            id SERIAL PRIMARY KEY,
+            institucion VARCHAR(100) NOT NULL,
+            fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+            total_publicaciones INTEGER DEFAULT 0,
+            total_comentarios INTEGER DEFAULT 0,
+            total_likes INTEGER DEFAULT 0,
+            total_views INTEGER DEFAULT 0,
+            UNIQUE (institucion, fecha)
+        );
     """
     try:
         cur.execute(crear_tabla_query)
         conn.commit()
-        print("Tabla 'estadisticas_universidad' verificada/creada exitosamente.")
+        print("Tablas de estadísticas verificadas/creadas exitosamente.")
     except Exception as e:
-        print(f"Error al crear tabla: {e}")
+        print(f"Error al crear tablas: {e}")
         conn.rollback()
         cur.close()
         conn.close()
@@ -91,7 +102,7 @@ def actualizar_estadisticas(institucion_arg="TODAS"):
     # 3. Insertar o actualizar (UPSERT) los resultados en la tabla de estadísticas
     print(f"Actualizando estadísticas para {len(resultados)} instituciones...")
     
-    upsert_query = """
+    upsert_global_query = """
         INSERT INTO estadisticas_universidad 
             (institucion, total_publicaciones, total_comentarios, total_likes, total_views, ultima_actualizacion)
         VALUES 
@@ -104,6 +115,19 @@ def actualizar_estadisticas(institucion_arg="TODAS"):
             total_views = EXCLUDED.total_views,
             ultima_actualizacion = NOW();
     """
+
+    upsert_historico_query = """
+        INSERT INTO estadisticas_historico
+            (institucion, fecha, total_publicaciones, total_comentarios, total_likes, total_views)
+        VALUES
+            (%s, CURRENT_DATE, %s, %s, %s, %s)
+        ON CONFLICT (institucion, fecha)
+        DO UPDATE SET
+            total_publicaciones = EXCLUDED.total_publicaciones,
+            total_comentarios = EXCLUDED.total_comentarios,
+            total_likes = EXCLUDED.total_likes,
+            total_views = EXCLUDED.total_views;
+    """
     
     exito = 0
     for fila in resultados:
@@ -114,7 +138,8 @@ def actualizar_estadisticas(institucion_arg="TODAS"):
         views = fila[4]
         
         try:
-            cur.execute(upsert_query, (institucion, pubs, coms, likes, views))
+            cur.execute(upsert_global_query, (institucion, pubs, coms, likes, views))
+            cur.execute(upsert_historico_query, (institucion, pubs, coms, likes, views))
             exito += 1
             print(f"[{institucion}] Pubs: {pubs} | Coms: {coms} | Likes: {likes} | Vistas: {views}")
         except Exception as e:

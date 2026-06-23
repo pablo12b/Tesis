@@ -73,10 +73,20 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
       ORDER BY cantidad DESC
     `;
     
-    const [statsRes, macroRes, fuentesRes] = await Promise.all([
+    // 4. Historial diario
+    const historicoQuery = `
+      SELECT TO_CHAR(fecha, 'YYYY-MM-DD') as fecha, total_publicaciones, total_comentarios, total_likes, total_views
+      FROM estadisticas_historico
+      WHERE institucion = $1
+      ORDER BY fecha ASC
+      LIMIT 30
+    `;
+    
+    const [statsRes, macroRes, fuentesRes, historicoRes] = await Promise.all([
       pool.query(statsQuery, [institucion]),
       pool.query(macroQuery, [institucion]),
-      pool.query(fuenteQuery, [institucion])
+      pool.query(fuenteQuery, [institucion]),
+      pool.query(historicoQuery, [institucion])
     ]);
     
     // Si no hay datos, retornamos objeto vacío
@@ -119,7 +129,8 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
       fuentes: fuentesRes.rows.map(f => ({
         fuente: f.fuente,
         cantidad: parseInt(f.cantidad)
-      }))
+      })),
+      historico: historicoRes.rows
     };
     
     res.json(respuesta);
@@ -159,10 +170,15 @@ app.post('/api/scraper/run', async (req, res) => {
   try {
     const runPythonScript = (scriptPath, args) => {
       return new Promise((resolve, reject) => {
-        // Ruta al ejecutable de Python en el entorno virtual
-        const pythonExe = process.platform === 'win32' 
-          ? path.join(__dirname, '..', 'venv', 'Scripts', 'python.exe')
-          : path.join(__dirname, '..', 'venv', 'bin', 'python');
+        // Ruta al ejecutable de Python
+        // Si estamos en producción (Docker en GCP), usamos el python del sistema/venv configurado en el PATH
+        // Si estamos en local (Windows/Mac), buscamos la carpeta venv relativa al proyecto
+        let pythonExe = 'python3';
+        if (process.env.NODE_ENV !== 'production') {
+          pythonExe = process.platform === 'win32' 
+            ? path.join(__dirname, '..', 'venv', 'Scripts', 'python.exe')
+            : path.join(__dirname, '..', 'venv', 'bin', 'python');
+        }
 
         console.log(`Ejecutando: ${pythonExe} ${scriptPath} ${args.join(' ')}`);
         

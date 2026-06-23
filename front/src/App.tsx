@@ -16,6 +16,7 @@ interface Estadisticas {
   emociones: Array<{ emocion_principal: string; cantidad: number }>
   estres: Array<{ factor_estres: string; cantidad: number }>
   fuentes: Array<{ fuente: string; cantidad: number }>
+  historico: Array<{ fecha: string; total_publicaciones: number; total_comentarios: number; total_likes: number; total_views: number }>
 }
 
 function App() {
@@ -27,6 +28,9 @@ function App() {
   const [activePage, setActivePage] = useState<string>('Overview')
 
   useEffect(() => {
+    // Configurar la URL base de Axios para que apunte al backend en producción
+    axios.defaults.baseURL = 'http://localhost:5000'
+
     const fetchData = async () => {
       try {
         setLoading(true)
