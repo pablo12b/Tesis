@@ -140,6 +140,34 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
   }
 });
 
+app.get('/api/global-narrativa', async (req, res) => {
+  try {
+    const macroQuery = `SELECT narrativa_general, porcentajes_emociones, factores_riesgo FROM narrativa_global_universidad WHERE institucion = 'GLOBAL'`;
+    const macroRes = await pool.query(macroQuery);
+    if (macroRes.rows.length > 0) {
+      const macro = macroRes.rows[0];
+      const emocionesFormat = Object.entries(macro.porcentajes_emociones || {}).map(([emocion, cantidad]) => ({
+        emocion_principal: emocion,
+        cantidad: Number(cantidad)
+      }));
+      const estresFormat = Object.entries(macro.factores_riesgo || {}).map(([factor, cantidad]) => ({
+        factor_estres: factor,
+        cantidad: Number(cantidad)
+      }));
+      res.json({
+        narrativa_general: macro.narrativa_general,
+        porcentajes_emociones: emocionesFormat,
+        factores_riesgo: estresFormat
+      });
+    } else {
+      res.json({ narrativa_general: "Análisis en proceso...", porcentajes_emociones: [], factores_riesgo: [] });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error en servidor' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });

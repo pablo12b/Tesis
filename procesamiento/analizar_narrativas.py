@@ -221,9 +221,82 @@ def ejecutar_map_reduce(institucion_arg="TODAS"):
             # Pausa final antes de pasar a la siguiente universidad
             time.sleep(62)
             
+        # == NUEVO: GENERAR NARRATIVA GLOBAL ==
+        if institucion_arg == "TODAS":
+            logger.info("="*60)
+            logger.info("GENERANDO NARRATIVA GLOBAL META-ANALÍTICA")
+            
+            cur.execute("SELECT institucion, narrativa_general, porcentajes_emociones, factores_riesgo FROM narrativa_global_universidad WHERE institucion != 'GLOBAL'")
+            rows = cur.fetchall()
+            
+            if rows:
+                textos_individuales = []
+                lista_emociones_global = []
+                lista_factores_global = []
+                
+                for r in rows:
+                    inst, narr, emo_json, fact_json = r
+                    textos_individuales.append(f"--- {inst} ---\n{narr}\n")
+                    if emo_json: lista_emociones_global.append(emo_json)
+                    if fact_json: lista_factores_global.append(fact_json)
+                
+                texto_combinado = "\n".join(textos_individuales)
+                
+                prompt_global = f"""
+                A continuación tienes los resúmenes narrativos individuales de varias universidades analizadas.
+                
+                RESÚMENES POR UNIVERSIDAD:
+                \"\"\"
+                {texto_combinado}
+                \"\"\"
+                
+                Tu tarea es redactar una NARRATIVA EMOCIONAL GLOBAL (3 o 4 párrafos bien estructurados) que englobe la situación conjunta de la comunidad universitaria, comparando brevemente y destacando los patrones comunes de bienestar o estrés en todas las instituciones analizadas.
+                Devuelve ÚNICAMENTE un JSON válido:
+                {{
+                    "narrativa_general": "La narrativa global comparativa aquí."
+                }}
+                """
+                
+                try:
+                    logger.info("Esperando 62 segundos antes de generar la global...")
+                    time.sleep(62)
+                    
+                    respuesta = client.chat.completions.create(
+                        model="llama-3.1-8b-instant",
+                        messages=[{"role": "user", "content": prompt_global}],
+                        temperature=0.3,
+                        max_tokens=1500,
+                        response_format={"type": "json_object"}
+                    )
+                    narrativa_final_global = json.loads(respuesta.choices[0].message.content.strip()).get("narrativa_general", "")
+                    
+                    emociones_promedio_global = promediar_diccionarios(lista_emociones_global)
+                    factores_promedio_global = promediar_diccionarios(lista_factores_global)
+                    
+                    cur.execute("""
+                        INSERT INTO narrativa_global_universidad 
+                        (institucion, narrativa_general, porcentajes_emociones, factores_riesgo, fecha_analisis)
+                        VALUES (%s, %s, %s, %s, NOW())
+                        ON CONFLICT (institucion) 
+                        DO UPDATE SET 
+                            narrativa_general = EXCLUDED.narrativa_general,
+                            porcentajes_emociones = EXCLUDED.porcentajes_emociones,
+                            factores_riesgo = EXCLUDED.factores_riesgo,
+                            fecha_analisis = NOW()
+                    """, (
+                        "GLOBAL", 
+                        narrativa_final_global,
+                        json.dumps(emociones_promedio_global),
+                        json.dumps(factores_promedio_global)
+                    ))
+                    conn.commit()
+                    logger.info("[ÉXITO] Narrativa GLOBAL generada y guardada.")
+                except Exception as e:
+                    logger.error(f"Error generando global: {str(e)}")
+
         cur.close()
         conn.close()
-        logger.info("\n[FINALIZADO] Análisis 100% de todas las universidades completado.")
+        logger.info("\n[FINALIZADO] Análisis 100% completado.")
         
     except Exception as e:
         logger.error(f"Error crítico: {str(e)}", exc_info=True)

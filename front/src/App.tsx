@@ -24,8 +24,8 @@ function App() {
   const [stats, setStats] = useState<Record<string, Estadisticas>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<string>('')
-  const [activePage, setActivePage] = useState<string>('Overview')
+  const [activePage, setActivePage] = useState<string>('Vista Global')
+  const [globalNarrativa, setGlobalNarrativa] = useState<any>(null)
 
   useEffect(() => {
     // Configurar la URL base de Axios para que apunte al backend en producción
@@ -46,17 +46,25 @@ function App() {
         }
         
         setUniversidades(univs)
-        setActiveTab(univs[0])
         
+        // Cargar estadísticas individuales
         const statsPromises = univs.map((u: string) => 
           axios.get(`/api/estadisticas/${u}`).then(res => ({
             [u]: res.data
           }))
         )
         
-        const statsResults = await Promise.all(statsPromises)
+        // Cargar narrativa global
+        const globalPromise = axios.get('/api/global-narrativa').then(res => res.data)
+        
+        const [statsResults, globalData] = await Promise.all([
+          Promise.all(statsPromises),
+          globalPromise
+        ])
+        
         const combinedStats = Object.assign({}, ...statsResults)
         setStats(combinedStats)
+        setGlobalNarrativa(globalData)
       } catch (err) {
         setError('Error al cargar los datos del servidor')
         console.error(err)
@@ -110,13 +118,11 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background">
-      {universidades.length > 0 && stats[activeTab] && (
+      {universidades.length > 0 && (
         <Dashboard
           universidades={universidades}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          estadisticas={stats[activeTab]}
           todasLasEstadisticas={stats}
+          globalNarrativa={globalNarrativa}
           activePage={activePage}
           onPageChange={setActivePage}
         />

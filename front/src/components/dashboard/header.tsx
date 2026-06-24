@@ -4,25 +4,24 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Download, RefreshCw, Loader2 } from "lucide-react"
 
 interface HeaderProps {
-  universidades: string[]
-  activeTab: string
-  onTabChange: (u: string) => void
+  activePage: string
 }
 
-export function DashboardHeader({ universidades, activeTab, onTabChange }: HeaderProps) {
+export function DashboardHeader({ activePage }: HeaderProps) {
   const [isUpdating, setIsUpdating] = useState(false)
 
-  const handleGlobalUpdate = async () => {
+  const handleUpdate = async () => {
     setIsUpdating(true)
+    const targetInstitucion = activePage === "Vista Global" ? "TODAS" : activePage;
     try {
       const response = await fetch('http://localhost:5000/api/scraper/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ institucion: 'TODAS' }),
+        body: JSON.stringify({ institucion: targetInstitucion }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error)
-      alert('¡Actualización de todas las universidades completada!')
+      alert(`¡Actualización de ${targetInstitucion} completada!`)
       window.location.reload()
     } catch (error: any) {
       alert('Hubo un error al actualizar: ' + error.message)
@@ -50,21 +49,10 @@ export function DashboardHeader({ universidades, activeTab, onTabChange }: Heade
           </div>
         </div>
 
-        {/* The requested university tabs */}
-        <div className="flex-1 flex justify-center overflow-x-auto hide-scrollbar">
-          <Tabs value={activeTab} onValueChange={onTabChange} className="w-fit">
-            <TabsList className="gap-2 p-1.5 bg-muted/60 border border-border/50 rounded-xl">
-              {universidades.map((u) => (
-                <TabsTrigger
-                  key={u}
-                  value={u}
-                  className="px-6 py-2.5 text-base font-semibold transition-all rounded-lg hover:bg-primary/20 hover:text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
-                >
-                  {u}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+        <div className="flex-1 flex justify-center">
+          <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            {activePage}
+          </h2>
         </div>
 
         <div className="flex items-center gap-3">
@@ -72,11 +60,11 @@ export function DashboardHeader({ universidades, activeTab, onTabChange }: Heade
             variant="outline"
             size="sm"
             className="gap-2 hidden sm:flex"
-            onClick={handleGlobalUpdate}
+            onClick={handleUpdate}
             disabled={isUpdating}
           >
             {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            {isUpdating ? "Actualizando Todas..." : "Actualizar Todas"}
+            {isUpdating ? "Sincronizando..." : `Sincronizar ${activePage === "Vista Global" ? "Todo" : activePage}`}
           </Button>
 
           <Button variant="default" size="sm" className="gap-2">

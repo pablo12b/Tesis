@@ -7,11 +7,10 @@ import {
 } from "lucide-react"
 
 const navigation = [
-  { name: "Overview", icon: LayoutDashboard, current: true },
+  { name: "Vista Global", icon: LayoutDashboard, current: true },
 ]
 
 const secondaryNavigation = [
-  { name: "Universidades", icon: GraduationCap },
   { name: "Fuentes", icon: Database },
   { name: "Configuración", icon: Settings },
 ]
@@ -19,9 +18,10 @@ const secondaryNavigation = [
 interface SidebarProps {
   activePage: string
   onPageChange: (page: string) => void
+  universidades: string[]
 }
 
-export function Sidebar({ activePage, onPageChange }: SidebarProps) {
+export function Sidebar({ activePage, onPageChange, universidades }: SidebarProps) {
   return (
     <aside className="hidden md:flex h-screen w-64 flex-col border-r border-border bg-sidebar shrink-0 sticky top-0">
       <div className="flex h-16 items-center gap-2 border-b border-border px-4">
@@ -54,6 +54,32 @@ export function Sidebar({ activePage, onPageChange }: SidebarProps) {
             >
               <item.icon className="h-5 w-5" />
               {item.name}
+            </a>
+          )
+        })}
+
+        <p className="mb-2 mt-6 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Universidades
+        </p>
+        {universidades.map((univ) => {
+          const isActive = activePage === univ;
+          return (
+            <a
+              key={univ}
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onPageChange(univ);
+              }}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )}
+            >
+              <GraduationCap className="h-5 w-5" />
+              {univ}
             </a>
           )
         })}
