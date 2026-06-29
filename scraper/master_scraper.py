@@ -51,6 +51,7 @@ INSTITUCIONES = {
         "abreviatura": "ups",
         "tiktok_user": "upsalesianaec",
         "facebook_url": "https://www.facebook.com/UPSalesianaEc",
+        "instagram_url": "https://www.instagram.com/upsalesianaec/",
         "palabras_clave": ["ups", "upscuenca", "politecnica salesiana", "politécnica salesiana", "salesiana"],
         "hashtags": ["upscuenca"],
         "busqueda_nombre": "UPS Cuenca"
@@ -60,6 +61,7 @@ INSTITUCIONES = {
         "abreviatura": "ucacue",
         "tiktok_user": "ucatocuenca",
         "facebook_url": "https://www.facebook.com/groups/ucacue.ec",
+        "instagram_url": "https://www.instagram.com/ucatolicacuenca/",
         "palabras_clave": ["ucacue", "universidad católica", "universidad catolica", "católica cuenca", "catolica cuenca"],
         "hashtags": ["catocorazon", "caucue", "ucacue"],
         "busqueda_nombre": "Católica Cuenca"
@@ -69,6 +71,7 @@ INSTITUCIONES = {
         "abreviatura": "uazuay",
         "tiktok_user": "uazuay",
         "facebook_url": "https://www.facebook.com/uazuay",
+        "instagram_url": "https://www.instagram.com/uda.oficial/",
         "palabras_clave": ["uda", "universidad del azuay", "azuay"],
         "hashtags": ["universidaddelazuay", "unazuay"],
         "busqueda_nombre": "Universidad del Azuay"
@@ -78,6 +81,7 @@ INSTITUCIONES = {
         "abreviatura": "ucuenca",
         "tiktok_user": "ucuenca",
         "facebook_url": "https://www.facebook.com/ucuenca",
+        "instagram_url": "https://www.instagram.com/udecuenca/",
         "palabras_clave": ["universidad de cuenca", "u de cuenca", "ucuenca", "udecu"],
         "hashtags": ["universidaddecuenca", "ucuenca", "udecu"],
         "busqueda_nombre": "Universidad de Cuenca"

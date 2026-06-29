@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react"
-import { Sidebar } from "./sidebar"
 import { DashboardHeader } from "./header"
 import { StatCard } from "./stat-card"
 import { EmotionsChart } from "./emotions-chart"
@@ -8,7 +7,8 @@ import { SourcesChart } from "./sources-chart"
 import { ComparisonChart } from "./comparison-chart"
 import { HistoricoChart } from "./historico-chart"
 import { ConfiguracionPanel } from "./configuracion"
-import { SidebarProvider } from "@/components/ui/sidebar"
+import { ContextoProyecto } from "./contexto"
+import { UsuariosPanel } from "./usuarios-panel"
 import type { Estadisticas } from "@/lib/types"
 import { Heart, MessageSquare, Eye, FileText } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -45,22 +45,21 @@ export default function Dashboard({
     views: acc.views + curr.metricas.views,
   }), { publicaciones: 0, comentarios: 0, likes: 0, views: 0 })
 
-  const maxPubs = Math.max(...todas.map(u => u.metricas.publicaciones))
-  const maxComs = Math.max(...todas.map(u => u.metricas.comentarios))
-  const maxLikes = Math.max(...todas.map(u => u.metricas.likes))
 
   // Calcular historico global
-  const historicoGlobalMap = new Map<string, { total_publicaciones: number, total_comentarios: number, total_likes: number, total_views: number }>()
+  const historicoGlobalMap = new Map<string, { Enojo: number, Tristeza: number, Miedo: number, Ansiedad: number, Alegría: number, Indiferencia: number }>()
   todas.forEach(univ => {
     univ.historico?.forEach(dia => {
       if (!historicoGlobalMap.has(dia.fecha)) {
-        historicoGlobalMap.set(dia.fecha, { total_publicaciones: 0, total_comentarios: 0, total_likes: 0, total_views: 0 })
+        historicoGlobalMap.set(dia.fecha, { Enojo: 0, Tristeza: 0, Miedo: 0, Ansiedad: 0, Alegría: 0, Indiferencia: 0 })
       }
       const actual = historicoGlobalMap.get(dia.fecha)!
-      actual.total_publicaciones += dia.total_publicaciones || 0
-      actual.total_comentarios += dia.total_comentarios || 0
-      actual.total_likes += dia.total_likes || 0
-      actual.total_views += dia.total_views || 0
+      actual.Enojo += dia.Enojo || 0
+      actual.Tristeza += dia.Tristeza || 0
+      actual.Miedo += dia.Miedo || 0
+      actual.Ansiedad += dia.Ansiedad || 0
+      actual.Alegría += dia.Alegría || 0
+      actual.Indiferencia += dia.Indiferencia || 0
     })
   })
   const historicoGlobal = Array.from(historicoGlobalMap.entries()).map(([fecha, datos]) => ({
@@ -69,13 +68,16 @@ export default function Dashboard({
   })).sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
   
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background font-sans antialiased text-foreground">
-        <Sidebar activePage={activePage} onPageChange={onPageChange} universidades={universidades} />
-        <main className="flex-1 flex flex-col min-w-0">
-          <DashboardHeader activePage={activePage} />
+    <div className="flex min-h-screen w-full bg-background font-sans antialiased text-foreground">
+      <main className="flex-1 flex flex-col min-w-0">
+        <DashboardHeader activePage={activePage} onPageChange={onPageChange} />
           <div ref={scrollRef} key={activePage} className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-500 fill-mode-both">
             
+            {/* CONTEXTO DEL PROYECTO */}
+            {activePage === "Contexto del Proyecto" && (
+              <ContextoProyecto universidades={universidades} onPageChange={onPageChange} />
+            )}
+
             {/* VISTA GLOBAL */}
             {activePage === "Vista Global" && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -234,9 +236,12 @@ export default function Dashboard({
             {activePage === "Configuración" && (
               <ConfiguracionPanel />
             )}
-          </div>
-        </main>
-      </div>
-    </SidebarProvider>
+            
+            {activePage === "Gestión de Usuarios" && (
+              <UsuariosPanel />
+            )}
+        </div>
+      </main>
+    </div>
   )
 }

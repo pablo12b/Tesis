@@ -13,10 +13,10 @@ interface Estadisticas {
     views: number
   }
   narrativa: string
-  emociones: Array<{ emocion_principal: string; cantidad: number }>
+  emociones: Array<{ emocion_principal: string; cantidad: number; ejemplo?: string }>
   estres: Array<{ factor_estres: string; cantidad: number }>
-  fuentes: Array<{ fuente: string; cantidad: number }>
-  historico: Array<{ fecha: string; total_publicaciones: number; total_comentarios: number; total_likes: number; total_views: number }>
+  fuentes: Array<{ fecha: string; TikTok: number; Instagram: number; Facebook: number }>
+  historico: Array<{ fecha: string; Enojo: number; Tristeza: number; Miedo: number; Ansiedad: number; Alegría: number; Indiferencia: number }>
 }
 
 function App() {
@@ -24,7 +24,7 @@ function App() {
   const [stats, setStats] = useState<Record<string, Estadisticas>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activePage, setActivePage] = useState<string>('Vista Global')
+  const [activePage, setActivePage] = useState<string>('Contexto del Proyecto')
   const [globalNarrativa, setGlobalNarrativa] = useState<any>(null)
 
   useEffect(() => {

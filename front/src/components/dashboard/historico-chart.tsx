@@ -1,4 +1,4 @@
-import { CartesianGrid, Line, LineChart, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts"
+import { Line, LineChart, CartesianGrid, XAxis, YAxis, Legend } from "recharts"
 import {
   Card,
   CardContent,
@@ -6,84 +6,67 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import type { Estadisticas } from "@/lib/types"
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
 
 interface HistoricoChartProps {
-  data: Estadisticas["historico"]
+  data: Array<{ fecha: string; Enojo: number; Tristeza: number; Miedo: number; Ansiedad: number; Alegría: number; Indiferencia: number }>
 }
 
 export function HistoricoChart({ data }: HistoricoChartProps) {
-  if (!data || data.length === 0) {
-    return null;
-  }
+  const chartConfig = {
+    Enojo: { label: "Enojo", color: "#ef4444" },
+    Tristeza: { label: "Tristeza", color: "#3b82f6" },
+    Miedo: { label: "Miedo", color: "#8b5cf6" },
+    Ansiedad: { label: "Ansiedad", color: "#f59e0b" },
+    Alegría: { label: "Alegría", color: "#10b981" },
+    Indiferencia: { label: "Indiferencia", color: "#9ca3af" },
+  } satisfies ChartConfig
+
+  // Formatear fechas para evitar problemas de zona horaria (UTC-5)
+  const formattedData = data.map(item => {
+    const date = new Date(item.fecha + "T12:00:00");
+    return {
+      ...item,
+      fechaDisplay: date.toLocaleDateString("es-ES", { day: "2-digit", month: "short" })
+    };
+  });
 
   return (
-    <Card className="col-span-full border-border/50 shadow-lg bg-card/50 backdrop-blur-xl">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Historial Diario de Interacciones</CardTitle>
-        <CardDescription>
-          Evolución de las métricas clave a lo largo del tiempo.
-        </CardDescription>
+        <CardTitle>Historial de Emociones Dominantes</CardTitle>
+        <CardDescription>Evolución diaria de las emociones expresadas</CardDescription>
       </CardHeader>
-      <CardContent className="h-[400px] w-full mt-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.2)" />
-            <XAxis 
-              dataKey="fecha" 
-              stroke="hsl(var(--muted-foreground))" 
-              fontSize={12} 
-              tickLine={false} 
-              axisLine={false} 
+      <CardContent className="flex-1 flex flex-col justify-center pb-6">
+        <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
+          <LineChart accessibilityLayer data={formattedData} margin={{ left: 10, right: 10 }}>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+            <XAxis
+              dataKey="fechaDisplay"
+              tickLine={false}
+              axisLine={false}
               tickMargin={10}
+              className="text-xs"
             />
-            <YAxis 
-              stroke="hsl(var(--muted-foreground))" 
-              fontSize={12} 
-              tickLine={false} 
-              axisLine={false} 
-              tickFormatter={(value) => `${value}`}
+            <YAxis hide />
+            <ChartTooltip
+              cursor={{ stroke: "var(--color-muted)", strokeWidth: 1, opacity: 0.5 }}
+              content={<ChartTooltipContent className="text-sm p-3 min-w-[150px]" />}
             />
-            <Tooltip 
-              contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-              itemStyle={{ color: 'hsl(var(--foreground))' }}
-            />
-            <Legend wrapperStyle={{ paddingTop: '20px' }} />
-            
-            <Line 
-              type="monotone" 
-              dataKey="total_publicaciones" 
-              name="Publicaciones" 
-              stroke="hsl(var(--primary))" 
-              strokeWidth={3}
-              activeDot={{ r: 8 }} 
-            />
-            <Line 
-              type="monotone" 
-              dataKey="total_comentarios" 
-              name="Comentarios" 
-              stroke="#10b981" 
-              strokeWidth={3}
-              activeDot={{ r: 8 }} 
-            />
-            <Line 
-              type="monotone" 
-              dataKey="total_likes" 
-              name="Likes" 
-              stroke="#f59e0b" 
-              strokeWidth={3}
-              activeDot={{ r: 8 }} 
-            />
-            <Line 
-              type="monotone" 
-              dataKey="total_views" 
-              name="Vistas" 
-              stroke="#8b5cf6" 
-              strokeWidth={3}
-              activeDot={{ r: 8 }} 
-            />
+            <Legend verticalAlign="top" height={36} />
+            <Line type="monotone" dataKey="Enojo" stroke="#ef4444" strokeWidth={2} dot={true} />
+            <Line type="monotone" dataKey="Tristeza" stroke="#3b82f6" strokeWidth={2} dot={true} />
+            <Line type="monotone" dataKey="Miedo" stroke="#8b5cf6" strokeWidth={2} dot={true} />
+            <Line type="monotone" dataKey="Ansiedad" stroke="#f59e0b" strokeWidth={2} dot={true} />
+            <Line type="monotone" dataKey="Alegría" stroke="#10b981" strokeWidth={2} dot={true} />
+            <Line type="monotone" dataKey="Indiferencia" stroke="#9ca3af" strokeWidth={2} dot={true} />
           </LineChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </CardContent>
     </Card>
   )

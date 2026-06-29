@@ -208,13 +208,21 @@ def ejecutar_map_reduce(institucion_arg="TODAS"):
                     narrativa_general = EXCLUDED.narrativa_general,
                     porcentajes_emociones = EXCLUDED.porcentajes_emociones,
                     factores_riesgo = EXCLUDED.factores_riesgo,
-                    fecha_analisis = NOW()
+                    fecha_analisis = EXCLUDED.fecha_analisis
             """, (
                 institucion, 
                 narrativa_final,
                 json.dumps(emociones_promedio),
                 json.dumps(factores_promedio)
             ))
+            
+            # GUARDAR EN HISTORIAL DE EMOCIONES
+            cur.execute("""
+                INSERT INTO historial_emociones_ia (institucion, fecha, emociones) 
+                VALUES (%s, CURRENT_DATE, %s)
+                ON CONFLICT (institucion, fecha) DO UPDATE SET emociones = EXCLUDED.emociones
+            """, (institucion, json.dumps(emociones_promedio)))
+
             conn.commit()
             logger.info(f"[ÉXITO] Análisis Map-Reduce guardado para {institucion}")
             
@@ -282,13 +290,21 @@ def ejecutar_map_reduce(institucion_arg="TODAS"):
                             narrativa_general = EXCLUDED.narrativa_general,
                             porcentajes_emociones = EXCLUDED.porcentajes_emociones,
                             factores_riesgo = EXCLUDED.factores_riesgo,
-                            fecha_analisis = NOW()
+                            fecha_analisis = EXCLUDED.fecha_analisis
                     """, (
                         "GLOBAL", 
                         narrativa_final_global,
                         json.dumps(emociones_promedio_global),
                         json.dumps(factores_promedio_global)
                     ))
+
+                    # GUARDAR EN HISTORIAL DE EMOCIONES GLOBAL
+                    cur.execute("""
+                        INSERT INTO historial_emociones_ia (institucion, fecha, emociones) 
+                        VALUES (%s, CURRENT_DATE, %s)
+                        ON CONFLICT (institucion, fecha) DO UPDATE SET emociones = EXCLUDED.emociones
+                    """, ("GLOBAL", json.dumps(emociones_promedio_global)))
+                    
                     conn.commit()
                     logger.info("[ÉXITO] Narrativa GLOBAL generada y guardada.")
                 except Exception as e:

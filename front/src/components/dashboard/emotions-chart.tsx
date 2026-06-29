@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/chart"
 
 interface EmotionsChartProps {
-  data: Array<{ emocion_principal: string; cantidad: number }>
+  data: Array<{ emocion_principal: string; cantidad: number; ejemplo?: string }>
 }
 
 export function EmotionsChart({ data }: EmotionsChartProps) {
@@ -49,7 +49,28 @@ export function EmotionsChart({ data }: EmotionsChartProps) {
             />
             <ChartTooltip
               cursor={{ fill: 'var(--color-muted)', opacity: 0.2 }}
-              content={<ChartTooltipContent indicator="line" className="text-sm p-3 min-w-[10rem] [&_.text-muted-foreground]:text-sm [&_.font-mono]:text-base" />}
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div className="rounded-lg border bg-background p-3 shadow-md max-w-[250px]">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-primary" />
+                          <span className="font-semibold">{data.emocion_principal}</span>
+                          <span className="ml-auto font-mono text-muted-foreground">{data.cantidad}%</span>
+                        </div>
+                        {data.ejemplo && (
+                          <div className="mt-1 pt-2 border-t border-border/50 text-xs text-muted-foreground italic line-clamp-4">
+                            "{data.ejemplo}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
             />
             <Bar
               dataKey="cantidad"

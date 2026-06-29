@@ -4,10 +4,12 @@ import {
   Settings,
   GraduationCap,
   Database,
+  Home,
 } from "lucide-react"
 
 const navigation = [
-  { name: "Vista Global", icon: LayoutDashboard, current: true },
+  { name: "Contexto del Proyecto", icon: Home, current: true },
+  { name: "Vista Global", icon: LayoutDashboard, current: false },
 ]
 
 const secondaryNavigation = [
