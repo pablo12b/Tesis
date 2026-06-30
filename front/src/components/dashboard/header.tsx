@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Download, RefreshCw, Loader2, Home, Lock, Unlock, X, Users, ChevronDown } from "lucide-react"
+import { RefreshCw, Loader2, Home, Lock, Unlock, X, Users, ChevronDown, Calendar } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface HeaderProps {
   activePage: string
   onPageChange: (page: string) => void
+  selectedDate?: string
+  onDateChange?: (date: string) => void
 }
 
-export function DashboardHeader({ activePage, onPageChange }: HeaderProps) {
+export function DashboardHeader({ activePage, onPageChange, selectedDate = "", onDateChange }: HeaderProps) {
   const [isUpdating, setIsUpdating] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
@@ -19,11 +21,29 @@ export function DashboardHeader({ activePage, onPageChange }: HeaderProps) {
   const [updateStatus, setUpdateStatus] = useState<"idle" | "success" | "error">("idle")
   const [updateMessage, setUpdateMessage] = useState("")
   const [updateLogs, setUpdateLogs] = useState<string[]>([])
+  const [availableDates, setAvailableDates] = useState<string[]>([])
 
   useEffect(() => {
     const token = localStorage.getItem("adminToken")
     if (token) setIsAdmin(true)
   }, [])
+
+  useEffect(() => {
+    // Fetch available dates for the active page
+    const fetchDates = async () => {
+      try {
+        const targetInstitucion = activePage === "Vista Global" ? "GLOBAL" : activePage;
+        const res = await fetch(`http://localhost:5000/api/fechas_disponibles/${targetInstitucion}`)
+        const dates = await res.json()
+        if (Array.isArray(dates)) {
+          setAvailableDates(dates)
+        }
+      } catch (e) {
+        console.error("Error fetching available dates", e)
+      }
+    }
+    fetchDates()
+  }, [activePage])
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -194,6 +214,21 @@ export function DashboardHeader({ activePage, onPageChange }: HeaderProps) {
                     {isUpdating ? "Sincronizando..." : `Sincronizar ${activePage === "Vista Global" ? "Todo" : activePage}`}
                   </Button>
                 </>
+              )}
+              {availableDates.length > 0 && onDateChange && (
+                <div className="flex items-center gap-2 border rounded-md px-2 h-9 bg-background/50">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <select 
+                    className="bg-transparent text-sm outline-none border-none cursor-pointer"
+                    value={selectedDate}
+                    onChange={(e) => onDateChange(e.target.value)}
+                  >
+                    <option value="">Hoy (Actual)</option>
+                    {availableDates.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
               )}
             </>
           )}

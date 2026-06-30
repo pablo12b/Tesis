@@ -126,23 +126,158 @@ app.get('/api/universidades', async (req, res) => {
   }
 });
 
+app.get('/api/fechas_disponibles/:institucion', async (req, res) => {
+  const { institucion } = req.params;
+  try {
+    const query = `
+      SELECT TO_CHAR(fecha, 'YYYY-MM-DD') as fecha 
+      FROM historial_narrativas_diarias 
+      WHERE institucion = $1 
+      ORDER BY fecha DESC
+    `;
+    const result = await pool.query(query, [institucion]);
+    res.json(result.rows.map(r => r.fecha));
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error en servidor' });
+  }
+});
+
+app.get('/api/comentarios/:institucion', async (req, res) => {
+  const { institucion } = req.params;
+  const { fecha } = req.query;
+  
+  try {
+    let query = `
+      SELECT id, contenido_original, emocion_predominante, institucion, TO_CHAR(fecha_captura, 'YYYY-MM-DD') as fecha
+      FROM narrativas_crudas
+    `;
+    let queryParams = [];
+    let conditions = [];
+
+    if (institucion !== 'GLOBAL') {
+      conditions.push(`institucion = $${conditions.length + 1}`);
+      queryParams.push(institucion);
+    }
+    
+    if (fecha) {
+      conditions.push(`DATE(fecha_captura) = $${conditions.length + 1}`);
+      queryParams.push(fecha);
+    }
+    
+    if (conditions.length > 0) {
+      query += ` WHERE ` + conditions.join(' AND ');
+    }
+    
+    query += ` ORDER BY fecha_captura DESC LIMIT 500`; // Limit to avoid massive payloads
+    
+    const result = await pool.query(query, queryParams);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ error: 'Error en servidor' });
+  }
+});
+
+// Endpoint para obtener publicaciones crudas y sus comentarios anidados
+app.get('/api/publicaciones/:institucion', async (req, res) => {
+  const { institucion } = req.params;
+  const { fecha } = req.query;
+
+  try {
+    let query = `
+      SELECT 
+          p.id, 
+          p.contenido_original, 
+          p.url_publicacion, 
+          p.emocion_predominante, 
+          p.institucion, 
+          TO_CHAR(p.fecha_captura, 'YYYY-MM-DD') as fecha,
+          COALESCE(
+              json_agg(
+                  json_build_object(
+                      'id', c.id,
+                      'contenido_original', c.contenido_original,
+                      'emocion_predominante', c.emocion_predominante,
+                      'fecha', TO_CHAR(c.fecha_captura, 'YYYY-MM-DD')
+                  )
+              ) FILTER (WHERE c.id IS NOT NULL),
+              '[]'
+          ) as comentarios
+      FROM narrativas_crudas p
+      LEFT JOIN narrativas_crudas c 
+          ON p.url_publicacion = c.url_publicacion 
+          AND c.tipo_texto = 'comentario'
+      WHERE p.tipo_texto = 'publicacion'
+    `;
+    
+    let queryParams = [];
+    let paramIndex = 1;
+
+    if (institucion !== 'GLOBAL') {
+      query += ` AND p.institucion = $${paramIndex}`;
+      queryParams.push(institucion);
+      paramIndex++;
+    }
+    
+    if (fecha) {
+      query += ` AND DATE(p.fecha_captura) = $${paramIndex}`;
+      queryParams.push(fecha);
+      paramIndex++;
+    }
+    
+    query += `
+      GROUP BY p.id, p.contenido_original, p.url_publicacion, p.emocion_predominante, p.institucion, p.fecha_captura
+      ORDER BY p.fecha_captura DESC
+      LIMIT 100
+    `;
+    
+    const result = await pool.query(query, queryParams);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching publicaciones:', error);
+    res.status(500).json({ error: 'Error en servidor' });
+  }
+});
+
 app.get('/api/estadisticas/:institucion', async (req, res) => {
   const { institucion } = req.params;
+  const { fecha } = req.query;
   
   try {
     // 1. Obtener Estadísticas Generales
-    const statsQuery = `
+    let statsQuery = `
       SELECT total_publicaciones, total_comentarios, total_likes, total_views 
       FROM estadisticas_universidad 
       WHERE institucion = $1
     `;
     
     // 2. Obtener Narrativa Global y Porcentajes de IA
-    const macroQuery = `
-      SELECT narrativa_general, porcentajes_emociones, factores_riesgo, ejemplos_emociones 
+    let macroQuery = `
+      SELECT narrativa_general, narrativa_estres, porcentajes_emociones, factores_riesgo, ejemplos_emociones 
       FROM narrativa_global_universidad 
       WHERE institucion = $1
     `;
+    
+    let queryParams = [institucion];
+    
+    if (fecha) {
+      statsQuery = `
+        SELECT 
+          (metricas->>'publicaciones')::int as total_publicaciones,
+          (metricas->>'comentarios')::int as total_comentarios,
+          (metricas->>'likes')::int as total_likes,
+          (metricas->>'views')::int as total_views
+        FROM historial_narrativas_diarias 
+        WHERE institucion = $1 AND fecha = $2
+      `;
+      macroQuery = `
+        SELECT narrativa_general, narrativa_estres, porcentajes_emociones, factores_riesgo, ejemplos_emociones 
+        FROM historial_narrativas_diarias 
+        WHERE institucion = $1 AND fecha = $2
+      `;
+      queryParams = [institucion, fecha];
+    }
     
     // 3. Obtener Historial de Fuentes desde crudas
     const fuenteQuery = `
@@ -173,8 +308,8 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
     `;
     
     const [statsRes, macroRes, fuentesRes, historicoRes] = await Promise.all([
-      pool.query(statsQuery, [institucion]),
-      pool.query(macroQuery, [institucion]),
+      pool.query(statsQuery, queryParams),
+      pool.query(macroQuery, queryParams),
       pool.query(fuenteQuery, [institucion]),
       pool.query(historicoQuery, [institucion])
     ]);
@@ -188,6 +323,7 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
     // Manejar el caso donde no haya macro-análisis (todavía generándose)
     const macro = macroRes.rows.length > 0 ? macroRes.rows[0] : {
       narrativa_general: "Análisis en proceso...",
+      narrativa_estres: "Análisis en proceso...",
       porcentajes_emociones: {},
       factores_riesgo: {},
       ejemplos_emociones: {}
@@ -238,6 +374,7 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
         views: parseInt(stats.total_views) || 0,
       },
       narrativa: macro.narrativa_general || "No disponible",
+      narrativa_estres: macro.narrativa_estres || "No disponible",
       emociones: emocionesFormat,
       estres: estresFormat,
       fuentes: fuentesFormat,
@@ -252,9 +389,17 @@ app.get('/api/estadisticas/:institucion', async (req, res) => {
 });
 
 app.get('/api/global-narrativa', async (req, res) => {
+  const { fecha } = req.query;
   try {
-    const macroQuery = `SELECT narrativa_general, porcentajes_emociones, factores_riesgo, ejemplos_emociones FROM narrativa_global_universidad WHERE institucion = 'GLOBAL'`;
-    const macroRes = await pool.query(macroQuery);
+    let macroQuery = `SELECT narrativa_general, porcentajes_emociones, factores_riesgo, ejemplos_emociones FROM narrativa_global_universidad WHERE institucion = 'GLOBAL'`;
+    let queryParams = [];
+    
+    if (fecha) {
+      macroQuery = `SELECT narrativa_general, porcentajes_emociones, factores_riesgo, ejemplos_emociones FROM historial_narrativas_diarias WHERE institucion = 'GLOBAL' AND fecha = $1`;
+      queryParams = [fecha];
+    }
+    
+    const macroRes = await pool.query(macroQuery, queryParams);
     if (macroRes.rows.length > 0) {
       const macro = macroRes.rows[0];
       const ejemplos = macro.ejemplos_emociones || {};

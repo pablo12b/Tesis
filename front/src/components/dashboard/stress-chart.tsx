@@ -1,4 +1,5 @@
 import { Cell, Pie, PieChart } from "recharts"
+import { Sparkles } from "lucide-react"
 import {
   Card,
   CardContent,
@@ -17,9 +18,10 @@ import {
 
 interface StressChartProps {
   data: Array<{ factor_estres: string; cantidad: number }>
+  narrativa_estres?: string
 }
 
-export function StressChart({ data }: StressChartProps) {
+export function StressChart({ data, narrativa_estres }: StressChartProps) {
   // Sort and keep only the top ones
   const sortedData = [...data].sort((a, b) => b.cantidad - a.cantidad)
 
@@ -90,6 +92,18 @@ export function StressChart({ data }: StressChartProps) {
             />
           </PieChart>
         </ChartContainer>
+
+        {narrativa_estres && (
+          <div className="mt-6 pt-6 border-t animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <h4 className="flex items-center gap-2 font-semibold text-primary mb-3">
+              <Sparkles className="h-5 w-5" /> 
+              Análisis de Factores
+            </h4>
+            <div className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line bg-primary/5 p-4 rounded-xl border border-primary/10">
+              {narrativa_estres}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

@@ -51,6 +51,7 @@ def crear_tabla_global():
                 id SERIAL PRIMARY KEY,
                 institucion VARCHAR(100) UNIQUE NOT NULL,
                 narrativa_general TEXT,
+                narrativa_estres TEXT,
                 porcentajes_emociones JSONB,
                 factores_riesgo JSONB,
                 fecha_analisis TIMESTAMP DEFAULT NOW()
@@ -107,10 +108,14 @@ def generar_narrativa_definitiva(institucion, resumenes_combinados):
     {resumenes_combinados}
     \"\"\"
     
-    Tu tarea es redactar la NARRATIVA EMOCIONAL GENERAL DEFINITIVA (3 o 4 párrafos bien estructurados) que englobe todo lo mencionado arriba.
-    Devuelve ÚNICAMENTE un JSON válido:
+    Tu tarea es redactar dos narrativas:
+    1. "narrativa_general": La NARRATIVA EMOCIONAL GENERAL DEFINITIVA (3 o 4 párrafos bien estructurados) que englobe todo lo mencionado.
+    2. "narrativa_estres": Una explicación detallada de cómo las emociones predominantes están afectando los distintos factores de riesgo (Académico, Económico, Social, etc.) y de dónde provienen estas preocupaciones o factores de estrés en la comunidad estudiantil.
+
+    Devuelve ÚNICAMENTE un JSON válido con ambas narrativas:
     {{
-        "narrativa_general": "La redacción final aquí."
+        "narrativa_general": "La redacción general aquí...",
+        "narrativa_estres": "La explicación de los factores de estrés aquí..."
     }}
     """
     
@@ -122,10 +127,17 @@ def generar_narrativa_definitiva(institucion, resumenes_combinados):
             max_tokens=1500,
             response_format={"type": "json_object"}
         )
-        return json.loads(respuesta.choices[0].message.content.strip()).get("narrativa_general", "")
+        data = json.loads(respuesta.choices[0].message.content.strip())
+        return {
+            "narrativa_general": data.get("narrativa_general", ""),
+            "narrativa_estres": data.get("narrativa_estres", "")
+        }
     except Exception as e:
         logger.error(f"Error en REDUCE: {str(e)}")
-        return "No se pudo generar la narrativa definitiva."
+        return {
+            "narrativa_general": "No se pudo generar la narrativa definitiva.",
+            "narrativa_estres": "No se pudo generar la narrativa de estrés."
+        }
 
 def promediar_diccionarios(lista_diccionarios):
     if not lista_diccionarios: return {}
@@ -137,6 +149,57 @@ def promediar_diccionarios(lista_diccionarios):
     return resultado
 
 import argparse
+import time
+
+def clasificar_emociones_comentarios(institucion, cur, conn):
+    logger.info(f"    -> [CLASIFICACIÓN INDIVIDUAL] Clasificando emociones para {institucion}...")
+    cur.execute("""
+        SELECT id, contenido_original FROM narrativas_crudas 
+        WHERE institucion = %s AND (emocion_predominante = 'Sin clasificar' OR emocion_predominante IS NULL)
+    """, (institucion,))
+    comentarios = cur.fetchall()
+    
+    if not comentarios:
+        logger.info(f"    -> No hay comentarios nuevos por clasificar para {institucion}.")
+        return
+
+    BATCH_SIZE = 40
+    for i in range(0, len(comentarios), BATCH_SIZE):
+        lote = comentarios[i:i+BATCH_SIZE]
+        logger.info(f"       Clasificando lote {i//BATCH_SIZE + 1}/{(len(comentarios)-1)//BATCH_SIZE + 1} ({len(lote)} comentarios)...")
+        
+        texto_lote = "\n".join([f"ID: {c[0]} | TEXTO: {c[1]}" for c in lote])
+        prompt = f"""
+        Clasifica la emoción predominante de cada uno de los siguientes comentarios.
+        Las opciones son estrictamente: Enojo, Tristeza, Alegría, Miedo, Ansiedad, Indiferencia.
+        Devuelve ÚNICAMENTE un JSON con la estructura:
+        {{
+            "clasificaciones": [
+                {{"id": 123, "emocion": "Enojo"}}
+            ]
+        }}
+        
+        COMENTARIOS:
+        {texto_lote}
+        """
+        try:
+            respuesta = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                response_format={"type": "json_object"}
+            )
+            res_json = json.loads(respuesta.choices[0].message.content.strip())
+            clasificaciones = res_json.get("clasificaciones", [])
+            
+            for c in clasificaciones:
+                cur.execute("UPDATE narrativas_crudas SET emocion_predominante = %s WHERE id = %s", (c.get("emocion", "Indiferencia"), c.get("id")))
+            conn.commit()
+            
+            time.sleep(2) # Respetar rate limits
+        except Exception as e:
+            logger.error(f"Error clasificando lote: {e}")
+            conn.rollback()
 
 def ejecutar_map_reduce(institucion_arg="TODAS"):
     logger.info("="*60)
@@ -170,6 +233,9 @@ def ejecutar_map_reduce(institucion_arg="TODAS"):
         for institucion, texto_agrupado in instituciones:
             logger.info(f"\n[UNIVERSIDAD] {institucion}")
             
+            # 1. CLASIFICACIÓN INDIVIDUAL DE COMENTARIOS NUEVOS
+            clasificar_emociones_comentarios(institucion, cur, conn)
+            
             # Dividir en fragmentos de 9000 caracteres
             TAMANO_CHUNK = 9000
             chunks = [texto_agrupado[i:i+TAMANO_CHUNK] for i in range(0, len(texto_agrupado), TAMANO_CHUNK)]
@@ -194,24 +260,46 @@ def ejecutar_map_reduce(institucion_arg="TODAS"):
             
             # FASE REDUCE
             texto_combinado = "\n".join(resumenes_parciales)
-            narrativa_final = generar_narrativa_definitiva(institucion, texto_combinado)
+            narrativas = generar_narrativa_definitiva(institucion, texto_combinado)
+            narrativa_final = narrativas.get("narrativa_general", "")
+            narrativa_estres_final = narrativas.get("narrativa_estres", "")
             emociones_promedio = promediar_diccionarios(lista_emociones)
             factores_promedio = promediar_diccionarios(lista_factores)
             
             # GUARDAR EN BD
             cur.execute("""
                 INSERT INTO narrativa_global_universidad 
-                (institucion, narrativa_general, porcentajes_emociones, factores_riesgo, fecha_analisis)
-                VALUES (%s, %s, %s, %s, NOW())
+                (institucion, narrativa_general, narrativa_estres, porcentajes_emociones, factores_riesgo, fecha_analisis)
+                VALUES (%s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (institucion) 
                 DO UPDATE SET 
                     narrativa_general = EXCLUDED.narrativa_general,
+                    narrativa_estres = EXCLUDED.narrativa_estres,
                     porcentajes_emociones = EXCLUDED.porcentajes_emociones,
                     factores_riesgo = EXCLUDED.factores_riesgo,
                     fecha_analisis = EXCLUDED.fecha_analisis
             """, (
                 institucion, 
                 narrativa_final,
+                narrativa_estres_final,
+                json.dumps(emociones_promedio),
+                json.dumps(factores_promedio)
+            ))
+            
+            # GUARDAR EN HISTORIAL DIARIO (COPIA ESTÁTICA)
+            cur.execute("""
+                INSERT INTO historial_narrativas_diarias 
+                (institucion, fecha, narrativa_general, narrativa_estres, porcentajes_emociones, factores_riesgo)
+                VALUES (%s, CURRENT_DATE, %s, %s, %s, %s)
+                ON CONFLICT (institucion, fecha) DO UPDATE SET 
+                    narrativa_general = EXCLUDED.narrativa_general,
+                    narrativa_estres = EXCLUDED.narrativa_estres,
+                    porcentajes_emociones = EXCLUDED.porcentajes_emociones,
+                    factores_riesgo = EXCLUDED.factores_riesgo
+            """, (
+                institucion,
+                narrativa_final,
+                narrativa_estres_final,
                 json.dumps(emociones_promedio),
                 json.dumps(factores_promedio)
             ))

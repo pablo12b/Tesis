@@ -10,7 +10,6 @@ import {
   ChartConfig,
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
 } from "@/components/ui/chart"
 
 interface EmotionsChartProps {
@@ -60,11 +59,6 @@ export function EmotionsChart({ data }: EmotionsChartProps) {
                           <span className="font-semibold">{data.emocion_principal}</span>
                           <span className="ml-auto font-mono text-muted-foreground">{data.cantidad}%</span>
                         </div>
-                        {data.ejemplo && (
-                          <div className="mt-1 pt-2 border-t border-border/50 text-xs text-muted-foreground italic line-clamp-4">
-                            "{data.ejemplo}"
-                          </div>
-                        )}
                       </div>
                     </div>
                   );

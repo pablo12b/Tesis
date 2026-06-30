@@ -8,6 +8,7 @@ interface StatCardProps {
   subtitle?: string
   icon?: LucideIcon
   className?: string
+  onClick?: () => void
 }
 
 export function StatCard({
@@ -16,9 +17,13 @@ export function StatCard({
   subtitle,
   icon: Icon,
   className,
+  onClick,
 }: StatCardProps) {
   return (
-    <Card className={cn("bg-card border-border shadow-sm", className)}>
+    <Card 
+      className={cn("bg-card border-border shadow-sm transition-all", onClick ? "cursor-pointer hover:shadow-md hover:border-primary/50 hover:-translate-y-0.5" : "", className)}
+      onClick={onClick}
+    >
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="space-y-1">

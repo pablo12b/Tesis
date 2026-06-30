@@ -3,21 +3,7 @@ import axios from 'axios'
 import Dashboard from './components/dashboard'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from './components/ui/button'
-
-interface Estadisticas {
-  institucion: string
-  metricas: {
-    publicaciones: number
-    comentarios: number
-    likes: number
-    views: number
-  }
-  narrativa: string
-  emociones: Array<{ emocion_principal: string; cantidad: number; ejemplo?: string }>
-  estres: Array<{ factor_estres: string; cantidad: number }>
-  fuentes: Array<{ fecha: string; TikTok: number; Instagram: number; Facebook: number }>
-  historico: Array<{ fecha: string; Enojo: number; Tristeza: number; Miedo: number; Ansiedad: number; Alegría: number; Indiferencia: number }>
-}
+import type { Estadisticas } from '@/lib/types'
 
 function App() {
   const [universidades, setUniversidades] = useState<string[]>([])
@@ -26,13 +12,10 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [activePage, setActivePage] = useState<string>('Contexto del Proyecto')
   const [globalNarrativa, setGlobalNarrativa] = useState<any>(null)
+  const [selectedDate, setSelectedDate] = useState<string>("")
 
-  useEffect(() => {
-    // Configurar la URL base de Axios para que apunte al backend en producción
-    axios.defaults.baseURL = 'http://localhost:5000'
-
-    const fetchData = async () => {
-      try {
+  const fetchData = async (fecha: string = "") => {
+    try {
         setLoading(true)
         setError(null)
         
@@ -47,15 +30,18 @@ function App() {
         
         setUniversidades(univs)
         
+        // Construir query string si hay fecha
+        const queryStr = fecha ? `?fecha=${fecha}` : ''
+        
         // Cargar estadísticas individuales
         const statsPromises = univs.map((u: string) => 
-          axios.get(`/api/estadisticas/${u}`).then(res => ({
+          axios.get(`/api/estadisticas/${u}${queryStr}`).then(res => ({
             [u]: res.data
           }))
         )
         
         // Cargar narrativa global
-        const globalPromise = axios.get('/api/global-narrativa').then(res => res.data)
+        const globalPromise = axios.get(`/api/global-narrativa${queryStr}`).then(res => res.data)
         
         const [statsResults, globalData] = await Promise.all([
           Promise.all(statsPromises),
@@ -73,8 +59,11 @@ function App() {
       }
     }
 
-    fetchData()
-  }, [])
+  useEffect(() => {
+    // Configurar la URL base de Axios para que apunte al backend en producción
+    axios.defaults.baseURL = 'http://localhost:5000'
+    fetchData(selectedDate)
+  }, [selectedDate])
 
   if (loading) {
     return (
@@ -125,6 +114,8 @@ function App() {
           globalNarrativa={globalNarrativa}
           activePage={activePage}
           onPageChange={setActivePage}
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
         />
       )}
     </div>

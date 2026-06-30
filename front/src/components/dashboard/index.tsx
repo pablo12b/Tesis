@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { DashboardHeader } from "./header"
 import { StatCard } from "./stat-card"
 import { EmotionsChart } from "./emotions-chart"
@@ -9,6 +9,8 @@ import { HistoricoChart } from "./historico-chart"
 import { ConfiguracionPanel } from "./configuracion"
 import { ContextoProyecto } from "./contexto"
 import { UsuariosPanel } from "./usuarios-panel"
+import { ComentariosModal } from "./comentarios-modal"
+import { PublicacionesModal } from "./publicaciones-modal"
 import type { Estadisticas } from "@/lib/types"
 import { Heart, MessageSquare, Eye, FileText } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -19,6 +21,8 @@ interface DashboardProps {
   globalNarrativa: any
   activePage: string
   onPageChange: (page: string) => void
+  selectedDate: string
+  onDateChange: (date: string) => void
 }
 
 export default function Dashboard({
@@ -27,8 +31,12 @@ export default function Dashboard({
   globalNarrativa,
   activePage,
   onPageChange,
+  selectedDate,
+  onDateChange
 }: DashboardProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [isComentariosOpen, setIsComentariosOpen] = useState(false)
+  const [isPublicacionesOpen, setIsPublicacionesOpen] = useState(false)
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -69,8 +77,18 @@ export default function Dashboard({
   
   return (
     <div className="flex min-h-screen w-full bg-background font-sans antialiased text-foreground">
-      <main className="flex-1 flex flex-col min-w-0">
-        <DashboardHeader activePage={activePage} onPageChange={onPageChange} />
+      <main className="flex-1 flex flex-col min-w-0 relative">
+        <DashboardHeader 
+          activePage={activePage} 
+          onPageChange={onPageChange} 
+          selectedDate={selectedDate}
+          onDateChange={onDateChange}
+        />
+        {selectedDate && (
+          <div className="bg-amber-100 border-b border-amber-200 text-amber-800 text-center py-2 text-sm font-medium">
+            Estás visualizando el archivo histórico del <strong>{selectedDate}</strong>. Los datos son de solo lectura.
+          </div>
+        )}
           <div ref={scrollRef} key={activePage} className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-500 fill-mode-both">
             
             {/* CONTEXTO DEL PROYECTO */}
@@ -92,16 +110,18 @@ export default function Dashboard({
                   <StatCard
                     title="Total Publicaciones"
                     value={totales.publicaciones.toLocaleString()}
-                    subtitle="Narrativas encontradas"
+                    subtitle="Ver publicaciones y comentarios"
                     icon={FileText}
                     className="border-primary/20 bg-primary/5"
+                    onClick={() => setIsPublicacionesOpen(true)}
                   />
                   <StatCard
                     title="Total Comentarios"
                     value={totales.comentarios.toLocaleString()}
-                    subtitle="Suma global"
+                    subtitle="Haz clic para ver comentarios"
                     icon={MessageSquare}
                     className="border-blue-500/20 bg-blue-500/5 [&_.text-primary]:text-blue-500 [&_.bg-primary\/10]:bg-blue-500/10"
+                    onClick={() => setIsComentariosOpen(true)}
                   />
                   <StatCard
                     title="Total Vistas"
@@ -166,14 +186,16 @@ export default function Dashboard({
                     <StatCard
                       title="Publicaciones"
                       value={estadisticas.metricas.publicaciones.toLocaleString()}
-                      subtitle={`Posts en ${activePage}`}
+                      subtitle="Ver publicaciones y comentarios"
                       icon={FileText}
+                      onClick={() => setIsPublicacionesOpen(true)}
                     />
                     <StatCard
                       title="Comentarios Totales"
                       value={estadisticas.metricas.comentarios.toLocaleString()}
-                      subtitle="Interacciones escritas"
+                      subtitle="Haz clic para ver comentarios"
                       icon={MessageSquare}
+                      onClick={() => setIsComentariosOpen(true)}
                     />
                     <StatCard
                       title="Vistas Totales"
@@ -242,6 +264,22 @@ export default function Dashboard({
             )}
         </div>
       </main>
+
+      {/* MODAL DE COMENTARIOS */}
+      <ComentariosModal 
+        isOpen={isComentariosOpen} 
+        onClose={() => setIsComentariosOpen(false)} 
+        institucion={activePage === "Vista Global" ? "GLOBAL" : activePage} 
+        fecha={selectedDate}
+      />
+
+      {/* MODAL DE PUBLICACIONES */}
+      <PublicacionesModal
+        isOpen={isPublicacionesOpen} 
+        onClose={() => setIsPublicacionesOpen(false)} 
+        institucion={activePage === "Vista Global" ? "GLOBAL" : activePage} 
+        fecha={selectedDate}
+      />
     </div>
   )
 }

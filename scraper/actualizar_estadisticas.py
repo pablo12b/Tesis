@@ -140,6 +140,21 @@ def actualizar_estadisticas(institucion_arg="TODAS"):
         try:
             cur.execute(upsert_global_query, (institucion, pubs, coms, likes, views))
             cur.execute(upsert_historico_query, (institucion, pubs, coms, likes, views))
+            
+            # Guardar también en historial_narrativas_diarias
+            import json
+            metricas_json = json.dumps({
+                "publicaciones": pubs,
+                "comentarios": coms,
+                "likes": likes,
+                "views": views
+            })
+            cur.execute("""
+                UPDATE historial_narrativas_diarias 
+                SET metricas = %s 
+                WHERE institucion = %s AND fecha = CURRENT_DATE
+            """, (metricas_json, institucion))
+            
             exito += 1
             print(f"[{institucion}] Pubs: {pubs} | Coms: {coms} | Likes: {likes} | Vistas: {views}")
         except Exception as e:
